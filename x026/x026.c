@@ -690,7 +690,7 @@ define_widgets(void)
 		fprintf(stderr, "No such card '%s', defaulting to '%s'\n"
 				"Use '-help' to list the types\n",
 				appres.card, cards[0].name);
-		ccard_type = &cards[i];
+		ccard_type = &cards[0];
 	}
 	attributes.valuemask = XpmSize;
 	if (XpmCreatePixmapFromData(display, XtWindow(container),
@@ -1466,6 +1466,8 @@ save_file_ascii(void)
 	XtPopdown(save_shell);
 
 	for (c = first_card(); c; c = c->next) {
+		if (c == ccard)
+			continue;
 		for (i = 0; i < N_COLS; i++) {
 			if (!c->n_ov[i]) {
 				fputc(' ', f);
@@ -1523,6 +1525,9 @@ save_file_image(void)
 	for (c = first_card(); c; c = c->next) {
 		int i;
 		unsigned char b3[3];
+
+		if (c == ccard)
+			continue;
 
 		fprintf(f, "%c%c%c",
 		    0x80 | ccard_type->card_type[0],
