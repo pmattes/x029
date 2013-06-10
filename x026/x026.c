@@ -251,6 +251,7 @@ struct charset {
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS /* øùúûüýþÿ */
       }
     },
+    /* DEC 026 (historical, no lowercase) */
     { "dec026", "DEC 026 ASCII", PTYPE_026_FORTRAN,
       {
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
@@ -287,6 +288,7 @@ struct charset {
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
       }
     },
+    /* DEC 029 (historical, no lowercase). */
     { "dec029", "DEC 029 ASCII", PTYPE_029,
       {
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
@@ -305,6 +307,80 @@ struct charset {
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* hijklmno */
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* pqrstuvw */
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* xyz{|}~  */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+      }
+    },
+    /* DEC 026 with control characters and lowercase. */
+    { "dec026-full", "DEC 026 with lowercase", PTYPE_026_FORTRAN,
+      {
+        05403, 04401, 04201, 04101, 00005, 01023, 01013, 01007, 
+        02011, 04021, 01021, 04103, 04043, 04023, 04013, 04007, 
+        06403, 02401, 02201, 02101, 00043, 00023, 00201, 01011, 
+        02003, 02403, 00007, 01005, 02043, 02023, 02013, 02007, 
+        00000, 04006, 01022, 01012, 02102, 01006, 02006, 00012, 
+        01042, 04042, 02042, 04000, 01102, 02000, 04102, 01400, 
+        01000, 00400, 00200, 00100, 00040, 00020, 00010, 00004, 
+        00002, 00001, 02202, 01202, 04012, 00102, 02012, 04202, 
+        00042, 04400, 04200, 04100, 04040, 04020, 04010, 04004, 
+        04002, 04001, 02400, 02200, 02100, 02040, 02020, 02010, 
+        02004, 02002, 02001, 01200, 01100, 01040, 01020, 01010, 
+        01004, 01002, 01001, 02022, 00006, 04022, 00022, 00202, 
+        00402, 05400, 05200, 05100, 05040, 05020, 05010, 05004, 
+        05002, 05001, 06400, 06200, 06100, 06040, 06020, 06010, 
+        06004, 06002, 06001, 03200, 03100, 03040, 03020, 03010, 
+        03004, 03002, 03001, 05000, 06000, 03000, 03400, 04005, 
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+      }
+    },
+    /* DEC 029 with control characters and lowercase. */
+    { "dec029-full", "DEC 029 with lowercase", PTYPE_029,
+      {
+        05403, 04401, 04201, 04101, 00005, 01023, 01013, 01007, 
+        02011, 04021, 01021, 04103, 04043, 04023, 04013, 04007, 
+        06403, 02401, 02201, 02101, 00043, 00023, 00201, 01011, 
+        02003, 02403, 00007, 01005, 02043, 02023, 02013, 02007, 
+        00000, 04006, 00006, 00102, 02102, 01042, 04000, 00022,
+        04022, 02022, 02042, 04012, 01102, 02000, 04102, 01400,
+        01000, 00400, 00200, 00100, 00040, 00020, 00010, 00004,
+        00002, 00001, 00202, 02012, 02042, 00012, 01012, 01006,
+        00042, 04400, 04200, 04100, 04040, 04020, 04010, 04004, 
+        04002, 04001, 02400, 02200, 02100, 02040, 02020, 02010, 
+        02004, 02002, 02001, 01200, 01100, 01040, 01020, 01010, 
+        01004, 01002, 01001, 04202, 01202, 02202, 02006, 01022,
+        00402, 05400, 05200, 05100, 05040, 05020, 05010, 05004, 
+        05002, 05001, 06400, 06200, 06100, 06040, 06020, 06010, 
+        06004, 06002, 06001, 03200, 03100, 03040, 03020, 03010, 
+        03004, 03002, 03001, 05000, 06000, 03000, 03400, 04005, 
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
@@ -550,12 +626,12 @@ usage(void)
   -typeahead       Allow typeahead (very un-026-like)\n\
   -charset <name>  Keypunch character set:\n");
 	for (i = 0; charsets[i].name != NULL; i++)
-		fprintf(stderr, "    %-9s%s\n",
+		fprintf(stderr, "    %-9s %s\n",
 			charsets[i].name, charsets[i].description);
 	fprintf(stderr, "\
   -card <name>     Card image:\n");
 	for (i = 0; cards[i].name != NULL; i++)
-		fprintf(stderr, "    %-9s%s\n",
+		fprintf(stderr, "    %-9s %s\n",
 			cards[i].name, cards[i].description);
 	fprintf(stderr, "\
   -026ftn          Alias for '-charset bcd-h'\n\
