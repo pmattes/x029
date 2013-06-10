@@ -58,13 +58,21 @@
  * There is also no attempt to map control codes between 8859-1 and punched
  * card code.
  */
+enum {
+    PTYPE_NONPRINTING = 0,
+    PTYPE_026_COMMERCIAL = 0x08,
+    PTYPE_026_FORTRAN = 0x10,
+    PTYPE_029 = 0x20
+} punch_type_t;
+
 struct charset {
 	char *name;
+	char *description;
 	unsigned char punch_type; /* for image save */
 	unsigned charset[256];
 } charsets[] = {
     /* 026 keypunch FORTRAN, the default. */
-    { "bcd-h", 0x10,
+    { "bcd-h", "026 FORTRAN (default)", PTYPE_026_FORTRAN,
       {    NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
@@ -100,7 +108,7 @@ struct charset {
       }
     },
     /* Original S/360 EBCDIC. */
-    { "ebcdic", 0x20,
+    { "ebcdic", "S/360 EBCDIC", PTYPE_029,
       {    NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
@@ -136,7 +144,7 @@ struct charset {
       }
     },
     /* 026 keypunch commercial. */
-    { "bcd-a", 0x08,
+    { "bcd-a", "026 commercial", PTYPE_026_COMMERCIAL,
       {    NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
@@ -172,7 +180,7 @@ struct charset {
       }
     },
     /* IBM 1401. */
-    { "1401", 0x0,
+    { "1401", "IBM 1401", PTYPE_NONPRINTING,
       {    NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
@@ -208,7 +216,7 @@ struct charset {
       }
     },
     /* 029 keypunch. */
-    { "029", 0x20,
+    { "029", "029 standard", PTYPE_029,
       {    NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
@@ -243,6 +251,78 @@ struct charset {
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS /* øùúûüýþÿ */
       }
     },
+    { "dec026", "DEC 026 ASCII", PTYPE_026_FORTRAN,
+      {
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+        00000, 04006, 01022, 01012, 02102, 01006, 02006, 00012, /*  !"#$%&' */
+        01042, 04042, 02042, 04000, 01102, 02000, 04102, 01400, /* ()*+,-./ */
+        01000, 00400, 00200, 00100, 00040, 00020, 00010, 00004, /* 01234567 */
+        00002, 00001, 02202, 01202, 04012, 00102, 02012, 04202, /* 89:;<=>? */
+        00042, 04400, 04200, 04100, 04040, 04020, 04010, 04004, /* @ABCDEFG */
+        04002, 04001, 02400, 02200, 02100, 02040, 02020, 02010, /* HIJKLMNO */
+        02004, 02002, 02001, 01200, 01100, 01040, 01020, 01010, /* PQRSTUVW */
+        01004, 01002, 01001, 02022, 00006, 04022, 00022, 00202, /* XYZ[\]^_ */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* `abcdefg */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* hijklmno */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* pqrstuvw */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* xyz{|}~  */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+      }
+    },
+    { "dec029", "DEC 029 ASCII", PTYPE_029,
+      {
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+        00000, 04006, 00006, 00102, 02102, 01042, 04000, 00022, /*  !"#$%&' */
+        04022, 02022, 02042, 04012, 01102, 02000, 04102, 01400, /* ()*+,-./ */
+        01000, 00400, 00200, 00100, 00040, 00020, 00010, 00004, /* 01234567 */
+        00002, 00001, 00202, 02012, 02042, 00012, 01012, 01006, /* 89:;<=>? */
+        00042, 04400, 04200, 04100, 04040, 04020, 04010, 04004, /* @ABCDEFG */
+        04002, 04001, 02400, 02200, 02100, 02040, 02020, 02010, /* HIJKLMNO */
+        02004, 02002, 02001, 01200, 01100, 01040, 01020, 01010, /* PQRSTUVW */
+        01004, 01002, 01001, 04202, 01202, 02202, 02006, 01022, /* XYZ[\]^_ */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* `abcdefg */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* hijklmno */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* pqrstuvw */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* xyz{|}~  */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+      }
+    },
     { NULL }
 };
 
@@ -271,13 +351,14 @@ struct charset {
 
 struct card_type {
 	char *name;
+	char *description;
 	char **pixmap_source;
 	unsigned char card_type[3];
 } cards[] = {
-	{ "collins", collins,
+	{ "collins", "Collins Radio Corporation", collins,
 		{ PC_COLOR_CREAM | PC_CORNER_ROUND | PC_CUT_LEFT,
 		  0, 0 } },
-	{ "cmu", carnegie2,
+	{ "cmu", "Carnegie Mellon University", carnegie2,
 		{ PC_COLOR_YELLOW_STRIPE | PC_CORNER_ROUND | PC_CUT_RIGHT,
 		  0, 0 } },
 	{ NULL, NULL }
@@ -459,21 +540,24 @@ static void save_popup(void);
 void
 usage(void)
 {
+	int i;
+
 	fprintf(stderr, "Usage: %s [x026-options] [Xt-options]\n",
 			programname);
 	fprintf(stderr, "x026-options:\n\
   -ifont <font>    Interpreter (card edge) font, defaults to 7x13\n\
   -nonumber        Do not automatically number cards in cols 73..80\n\
   -typeahead       Allow typeahead (very un-026-like)\n\
-  -charset <name>  Keypunch character set:\n\
-     bcd-h    026 FORTRAN (default)\n\
-     bcd-a    026 commercial\n\
-     029      029 standard\n\
-     1401     IBM 1401\n\
-     ebcdic   S/360 EBCDIC\n\
-  -card <name>     Card image:\n\
-     collins  Collins Radio Corporation\n\
-     cmu      Carnegie Mellon University\n\
+  -charset <name>  Keypunch character set:\n");
+	for (i = 0; charsets[i].name != NULL; i++)
+		fprintf(stderr, "    %-9s%s\n",
+			charsets[i].name, charsets[i].description);
+	fprintf(stderr, "\
+  -card <name>     Card image:\n");
+	for (i = 0; cards[i].name != NULL; i++)
+		fprintf(stderr, "    %-9s%s\n",
+			cards[i].name, cards[i].description);
+	fprintf(stderr, "\
   -026ftn          Alias for '-charset bcd-h'\n\
   -026comm         Alias for '-charset bcd-a'\n\
   -029             Alias for '-charset 029'\n\
