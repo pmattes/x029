@@ -27,6 +27,7 @@
 
 #include "collins.xpm"		/* card image */
 #include "carnegie2.xpm"	/* card image */
+#include "ibm.xpm"		/* card image */
 #include "hole.xpm"		/* hole image */
 
 #include "x026.bm"		/* icon */
@@ -437,6 +438,9 @@ struct card_type {
 		  0, 0 } },
 	{ "cmu", "Carnegie Mellon University", carnegie2,
 		{ PC_COLOR_YELLOW_STRIPE | PC_CORNER_ROUND | PC_CUT_RIGHT,
+		  0, 0 } },
+	{ "ibm", "IBM", ibm,
+		{ PC_COLOR_CREAM | PC_CORNER_ROUND | PC_CUT_LEFT,
 		  0, 0 } },
 	{ NULL, NULL }
 };
