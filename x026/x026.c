@@ -1,5 +1,5 @@
 /*
- * Copyright 1993, 1995, 2002, 2003 Paul Mattes.  All Rights Reserved.
+ * Copyright 1993, 1995, 2002, 2003, 2013 Paul Mattes.  All Rights Reserved.
  *   Permission to use, copy, modify, and distribute this software and its
  *   documentation for any purpose and without fee is hereby granted,
  *   provided that the above copyright notice appear in all copies and that
@@ -28,6 +28,7 @@
 #include "collins.xpm"		/* card image */
 #include "carnegie2.xpm"	/* card image */
 #include "ibm.xpm"		/* card image */
+
 #include "hole.xpm"		/* hole image */
 
 #include "x026.bm"		/* icon */
