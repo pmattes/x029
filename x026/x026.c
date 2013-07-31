@@ -1506,44 +1506,59 @@ void (*eq_fn[])(int) = {
 	do_newcard,
 	do_quit
 };
-struct {
+typedef struct event {
+	struct event *next;
 	enum evtype evtype;
 	unsigned char param;	/* optional */
 	int delay;
-} eventq[N_EVENTS];
-int eq_fillp, eq_emptyp, eq_count;
+} event_t;
+event_t *eq_first, *eq_last;
+int eq_count;
 
 static void
 deq_event(XtPointer data, XtIntervalId *id)
 {
 	int delay;
+	event_t *e;
 
 	if (!eq_count)
 		return;
-	(*eq_fn[eventq[eq_emptyp].evtype])(eventq[eq_emptyp].param);
-	delay = eventq[eq_emptyp].delay;
-	eq_emptyp = (eq_emptyp + 1) % N_EVENTS;
+
+	e = eq_first;
+	eq_first = e->next;
+	if (eq_first == NULL)
+		eq_last = NULL;
+
+	(*eq_fn[e->evtype])(e->param);
+	delay = e->delay;
 	if (--eq_count)
 		(void) XtAppAddTimeOut(appcontext, delay, deq_event, NULL);
+	XtFree((XtPointer)e);
 }
 
 static Boolean
 enq_event(enum evtype evtype, unsigned char param, Boolean restricted, int delay)
 {
+	event_t *e;
+
 	if (restricted && eq_count) {
-		XBell(display, 0);
-		return False;
-	}
-	if (eq_count >= N_EVENTS) {
 		XBell(display, 0);
 		return False;
 	}
 	if (evtype == DUMMY && delay == 0)
 		return True;
-	eventq[eq_fillp].evtype = evtype;
-	eventq[eq_fillp].param = param;
-	eventq[eq_fillp].delay = delay;
-	eq_fillp = (eq_fillp + 1) % N_EVENTS;
+	e = (event_t *)XtMalloc(sizeof(*e));
+	e->evtype = evtype;
+	e->param = param;
+	e->delay = delay;
+
+	e->next = eq_last;
+	if (eq_first == NULL)
+		eq_first = e;
+	if (eq_last != NULL)
+		eq_last->next = e;
+	eq_last = e;
+
 	if (!eq_count++)
 		(void) XtAppAddTimeOut(appcontext, delay, deq_event, NULL);
 	return True;
