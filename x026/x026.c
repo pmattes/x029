@@ -31,6 +31,9 @@
 
 #include "hole.xpm"		/* hole image */
 
+#include "off60.xpm"		/* switch, off */
+#include "on60.xpm"		/* switch, on */
+
 #include "x026.bm"		/* icon */
 
 /* Symbolic code for 'no such translation.' */
@@ -446,6 +449,11 @@ struct card_type {
 	{ NULL, NULL }
 };
 
+char *top_label[] = { "ON", NULL, "ONE", "ON", "ON", "ON", NULL, "ON" };
+char *bottom_label1[] = { "AUTO", NULL, "TWO", "AUTO", "PRINT", "LZ", NULL, "CLEAR" };
+char *bottom_label2[] = { "SKIP", NULL, "PROG", "FEED", NULL, "PRINT", NULL, NULL };
+char *bottom_label3[] = { "DUP", NULL, "SEL", NULL, NULL, NULL, NULL, NULL };
+
 #define SLOW	75
 #define FAST	25
 
@@ -463,6 +471,11 @@ struct card_type {
 
 #define HOLE_WIDTH	5	/* unused for now */
 #define HOLE_HEIGHT	11	/* unused for now */
+
+#define SWITCH_AIR	40
+#define SWITCH_HEIGHT	60
+#define SWITCH_WIDTH	42
+#define SWITCH_SKIP	(2*SWITCH_AIR + SWITCH_HEIGHT)
 
 #define TOP_PAD		15
 #define TEXT_PAD	8
@@ -575,6 +588,8 @@ static String fallbacks[] = {
 	"*ifont:	7x13",
 	"*pos.font:	6x13bold",
 	"*dialog*value*font: fixed",
+	"*switch.font:  6x10",
+	"*switch.background:  grey92",
 	"*font:		variable",
 	"*cabinet:	grey92",
 	"*cardColor:	ivory",
@@ -783,6 +798,44 @@ button_callback(Widget w, XtPointer client_data, XtPointer call_data)
 	(*b->callback)(0);
 }
 
+/* Definitions for the toggle switches. */
+
+static Pixmap on, off;
+
+struct toggle {
+	Widget w;
+	int on;
+};
+struct toggle toggles[8];
+
+/* Timeout function for the clear switch. */
+static void
+unclear_event(XtPointer data, XtIntervalId *id)
+{
+	toggles[7].on = 0;
+	XtVaSetValues(toggles[7].w, XtNbackgroundPixmap, off, NULL);
+}
+
+/* Callback function for toggle switches. */
+static void
+toggle_callback(Widget w, XtPointer client_data, XtPointer call_data)
+{
+	struct toggle *t = (struct toggle *)client_data;
+
+	if (t != &toggles[7]) {
+		t->on = !t->on;
+		XtVaSetValues(w, XtNbackgroundPixmap, t->on? on: off, NULL);
+		return;
+	}
+
+	/* It's the clear switch. */
+	if (t->on)
+	    	return;
+	t->on = !t->on;
+	XtVaSetValues(w, XtNbackgroundPixmap, t->on? on: off, NULL);
+	(void) XtAppAddTimeOut(appcontext, SLOW * 6, unclear_event, NULL);
+}
+
 /* Card-image data structures. */
 
 #define N_COLS	80	/* number of columns (80, of course) */
@@ -820,6 +873,7 @@ define_widgets(void)
 	int i;
 	Pixmap pixmap, shapemask;
 	Pixmap hole_shapemask;
+	Dimension sx;
 	XpmAttributes attributes;
 	static char translations[] = "\
 		<Key>Left:	Left()\n\
@@ -874,7 +928,7 @@ define_widgets(void)
 	hole_width = attributes.width;
 	hole_height = attributes.height;
 	w = card_width + 2*CARD_AIR;
-	h = card_height + 2*CARD_AIR + 2*BUTTON_GAP + 2*BUTTON_BW + BUTTON_HEIGHT;
+	h = SWITCH_SKIP + card_height + 2*CARD_AIR + 2*BUTTON_GAP + 2*BUTTON_BW + BUTTON_HEIGHT;
 	XtVaSetValues(container,
 	    XtNwidth, w,
 	    XtNheight, h,
@@ -921,7 +975,7 @@ define_widgets(void)
 		    XtNwidth, BUTTON_WIDTH,
 		    XtNheight, BUTTON_HEIGHT,
 		    XtNx, BUTTON_GAP + i*(2*BUTTON_BW + BUTTON_WIDTH + BUTTON_GAP),
-		    XtNy, card_height + 2*CARD_AIR + BUTTON_GAP,
+		    XtNy, card_height + 2*CARD_AIR + SWITCH_SKIP + BUTTON_GAP,
 		    XtNborderWidth, BUTTON_BW,
 		    XtNborderColor, appres.background,
 		    NULL
@@ -936,7 +990,7 @@ define_widgets(void)
 	    XtNlabel, "0",
 	    XtNwidth, BUTTON_WIDTH,
 	    XtNx, w - BUTTON_GAP - BUTTON_WIDTH - 2*BUTTON_BW,
-	    XtNy, card_height + 2*CARD_AIR + BUTTON_GAP,
+	    XtNy, card_height + 2*CARD_AIR + SWITCH_SKIP + BUTTON_GAP,
 	    XtNheight, BUTTON_HEIGHT,
 	    XtNborderWidth, BUTTON_BW,
 	    XtNborderColor, appres.background,
@@ -949,12 +1003,75 @@ define_widgets(void)
 	    XtNlabel, "Discard",
 	    XtNwidth, BUTTON_WIDTH,
 	    XtNx, w - 2* (BUTTON_GAP + BUTTON_WIDTH + 2*BUTTON_BW),
-	    XtNy, card_height + 2*CARD_AIR + BUTTON_GAP,
+	    XtNy, card_height + 2*CARD_AIR + SWITCH_SKIP + BUTTON_GAP,
 	    XtNheight, BUTTON_HEIGHT,
 	    XtNborderWidth, BUTTON_BW,
 	    XtNborderColor, appres.background,
 	    NULL);
 	XtAddCallback(ww, XtNcallback, discard, NULL);
+
+	/* Add the switches. */
+	if (XpmCreatePixmapFromData(display, XtWindow(container), off60_xpm,
+			&off, &shapemask, &attributes) != XpmSuccess) {
+		XtError("XpmCreatePixmapFromData failed");
+	}
+	if (XpmCreatePixmapFromData(display, XtWindow(container), on60_xpm,
+			&on, &shapemask, &attributes) != XpmSuccess) {
+		XtError("XpmCreatePixmapFromData failed");
+	}
+	sx = (w - 8*SWITCH_WIDTH - 7*BUTTON_GAP) / 2;
+	for (i = 0; i < 8; i++) {
+		if (i == 1 || i == 6)
+			continue;
+		toggles[i].on = (i < 7);
+		toggles[i].w = XtVaCreateManagedWidget(
+		    "switchcmd", commandWidgetClass, container,
+		    XtNwidth, SWITCH_WIDTH,
+		    XtNx, sx + i*(SWITCH_WIDTH + BUTTON_GAP),
+		    XtNy, h - BUTTON_GAP - SWITCH_HEIGHT - 30,
+		    XtNheight, SWITCH_HEIGHT,
+		    XtNborderWidth, 0,
+		    XtNlabel, "",
+		    XtNbackgroundPixmap, toggles[i].on? on: off,
+		    XtNhighlightThickness, 0,
+		    NULL);
+		XtAddCallback(toggles[i].w, XtNcallback, toggle_callback,
+			&toggles[i]);
+		ww = XtVaCreateManagedWidget(
+		    "switch", labelWidgetClass, container,
+		    XtNwidth, SWITCH_WIDTH,
+		    XtNx, sx + i*(SWITCH_WIDTH + BUTTON_GAP),
+		    XtNy, h - BUTTON_GAP - SWITCH_HEIGHT - 40,
+		    XtNborderWidth, 0,
+		    XtNlabel, top_label[i],
+		    NULL);
+		ww = XtVaCreateManagedWidget(
+		    "switch", labelWidgetClass, container,
+		    XtNwidth, SWITCH_WIDTH,
+		    XtNx, sx + i*(SWITCH_WIDTH + BUTTON_GAP),
+		    XtNy, h - BUTTON_GAP - 35,
+		    XtNborderWidth, 0,
+		    XtNlabel, bottom_label1[i],
+		    NULL);
+		if (bottom_label2[i] != NULL)
+			ww = XtVaCreateManagedWidget(
+			    "switch", labelWidgetClass, container,
+			    XtNwidth, SWITCH_WIDTH,
+			    XtNx, sx + i*(SWITCH_WIDTH + BUTTON_GAP),
+			    XtNy, h - BUTTON_GAP - 25,
+			    XtNborderWidth, 0,
+			    XtNlabel, bottom_label2[i],
+			    NULL);
+		if (bottom_label3[i] != NULL)
+			ww = XtVaCreateManagedWidget(
+			    "switch", labelWidgetClass, container,
+			    XtNwidth, SWITCH_WIDTH,
+			    XtNx, sx + i*(SWITCH_WIDTH + BUTTON_GAP),
+			    XtNy, h - BUTTON_GAP - 15,
+			    XtNborderWidth, 0,
+			    XtNlabel, bottom_label3[i],
+			    NULL);
+	}
 
 	/* Create graphics contexts for drawing. */
 	xgcv.foreground = appres.foreground;
@@ -1000,7 +1117,7 @@ define_widgets(void)
 	    XtNwidth, CELL_WIDTH,
 	    XtNheight, C2H,
 	    XtNx, CARD_AIR + LEFT_PAD + CELL_X(((N_COLS/2)+1)) + 1,
-	    XtNy, h-C2H-2,
+	    XtNy, h-C2H-2 - SWITCH_SKIP,
 	    NULL);
 	XtRealizeWidget(ww);
 }
