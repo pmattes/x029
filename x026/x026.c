@@ -454,6 +454,7 @@ char *bottom_label1[] = { "AUTO", NULL, "TWO", "AUTO", "PRINT", "LZ", NULL, "CLE
 char *bottom_label2[] = { "SKIP", NULL, "PROG", "FEED", NULL, "PRINT", NULL, NULL };
 char *bottom_label3[] = { "DUP", NULL, "SEL", NULL, NULL, NULL, NULL, NULL };
 
+#define VERY_SLOW 500
 #define SLOW	75
 #define FAST	25
 
@@ -530,6 +531,7 @@ typedef struct {
 	char	*ifontname;
 	char	*charset;
 	char	*card;
+	char	*batch;
 	Boolean	autonumber;
 	Boolean	typeahead;
 	Boolean	help;
@@ -545,6 +547,7 @@ static XrmOptionDescRec options[]= {
 	{ "-mono",	".cabinet",	XrmoptionNoArg,		"black" },
 	{ "-charset",	".charset",	XrmoptionSepArg,	NULL },
 	{ "-card",	".card",	XrmoptionSepArg,	NULL },
+	{ "-batch",	".batch",	XrmoptionSepArg,	NULL },
 
 	/* Options compatible with Douglas Jones's tools */
 	{ "-026ftn",	".charset",	XrmoptionNoArg,		"bcd-h" },
@@ -559,27 +562,29 @@ static XrmOptionDescRec options[]= {
 #define offset(field) XtOffset(AppResptr, field)
 static XtResource resources[] = {
 	{ XtNforeground, XtCForeground, XtRPixel, sizeof(Pixel),
-	offset(foreground), XtRString, "XtDefaultForeground" },
+	  offset(foreground), XtRString, "XtDefaultForeground" },
 	{ XtNbackground, XtCBackground, XtRPixel, sizeof(Pixel),
-	offset(background), XtRString, "XtDefaultBackground" },
+	  offset(background), XtRString, "XtDefaultBackground" },
 	{ "cabinet", "Cabinet", XtRPixel, sizeof(Pixel),
-	offset(cabinet), XtRString, "grey92" },
+	  offset(cabinet), XtRString, "grey92" },
 	{ "cardColor", "CardColor", XtRPixel, sizeof(Pixel),
-	offset(cardcolor), XtRString, "ivory" },
+	  offset(cardcolor), XtRString, "ivory" },
 	{ "errColor", "ErrColor", XtRPixel, sizeof(Pixel),
-	offset(errcolor), XtRString, "firebrick" },
+	  offset(errcolor), XtRString, "firebrick" },
 	{ "ifont", "IFont", XtRString, sizeof(String),
-	offset(ifontname), XtRString, 0 },
+	  offset(ifontname), XtRString, 0 },
 	{ "autoNumber", "AutoNumber", XtRBoolean, sizeof(Boolean),
-	offset(autonumber), XtRString, "True" },
+	  offset(autonumber), XtRString, "True" },
 	{ "typeahead", "Typeahead", XtRBoolean, sizeof(Boolean),
-	offset(typeahead), XtRString, "False" },
+	  offset(typeahead), XtRString, "False" },
 	{ "charset", "Charset", XtRString, sizeof(String),
-	offset(charset), XtRString, "bcd-h" },
+	  offset(charset), XtRString, "bcd-h" },
 	{ "card", "Card", XtRString, sizeof(String),
-	offset(card), XtRString, "collins" },
+	  offset(card), XtRString, "collins" },
+	{ "batch", "Batch", XtRString, sizeof(String),
+	  offset(batch), XtRString, NULL },
 	{ "help", "Help", XtRBoolean, sizeof(Boolean),
-	offset(help), XtRString, "False" },
+	  offset(help), XtRString, "False" },
 };
 #undef offset
 
@@ -630,8 +635,12 @@ int actioncount = XtNumber(actions);
 
 /* Forward references. */
 static void define_widgets(void);
-static void new_card(void);
+static void new_card(Boolean always_scroll);
 static void save_popup(void);
+static Boolean add_char(char c);
+static void enq_quit(void);
+static void enq_delay(void);
+static void card_complete(void);
 
 /* Syntax. */
 void
@@ -769,7 +778,40 @@ main(int argc, char *argv[])
 	audio_init();
 #endif /*]*/
 
-	new_card();
+	if (appres.batch) {
+		FILE *f;
+		char buf[1024];
+		Boolean any = False;
+
+		f = fopen(appres.batch, "r");
+		if (f == NULL) {
+			perror(appres.batch);
+			exit(1);
+		}
+		while (fgets(buf, sizeof(buf), f) != NULL) {
+			char *s = buf;
+			char c;
+
+			if (any)
+				enq_delay();
+			new_card(any);
+			enq_delay();
+			any = True;
+			buf[80] = '\0';
+			while ((c = *s++) != '\0') {
+				if (c < ' ') {
+					continue;
+				}
+				add_char(c);
+			}
+		}
+		fclose(f);
+		if (any)
+			card_complete();
+		enq_quit();
+	} else {
+		new_card(False);
+	}
 
 	/* Process X events forever. */
 	XtAppMainLoop(appcontext);
@@ -1438,12 +1480,18 @@ do_slam(int ignored)
 	    NULL);
 }
 
+static void
+do_quit(int ignored)
+{
+    	exit(0);
+}
+
 /*
  * Event queueing: Inserting artificial delays in processing certain events.
  */
-#define N_EVENTS	500
+#define N_EVENTS	500000
 enum evtype { DUMMY, DATA, MULTI, LEFT, RIGHT, HOME,
-	      PAN_RIGHT, PAN_LEFT, PAN_UP, SLAM, NEWCARD };
+	      PAN_RIGHT, PAN_LEFT, PAN_UP, SLAM, NEWCARD, QUIT };
 void (*eq_fn[])(int) = {
 	do_nothing,
 	do_data,
@@ -1455,7 +1503,8 @@ void (*eq_fn[])(int) = {
 	do_pan_left,
 	do_pan_up,
 	do_slam,
-	do_newcard
+	do_newcard,
+	do_quit
 };
 struct {
 	enum evtype evtype;
@@ -1489,7 +1538,7 @@ enq_event(enum evtype evtype, unsigned char param, Boolean restricted, int delay
 		XBell(display, 0);
 		return False;
 	}
-	if (evtype == DUMMY)
+	if (evtype == DUMMY && delay == 0)
 		return True;
 	eventq[eq_fillp].evtype = evtype;
 	eventq[eq_fillp].param = param;
@@ -1498,6 +1547,26 @@ enq_event(enum evtype evtype, unsigned char param, Boolean restricted, int delay
 	if (!eq_count++)
 		(void) XtAppAddTimeOut(appcontext, delay, deq_event, NULL);
 	return True;
+}
+
+static Boolean
+add_char(char c)
+{
+	return enq_event(DATA, c, False, SLOW);
+}
+
+static void
+enq_quit(void)
+{
+	(void) enq_event(DUMMY, 0, False, SLOW);
+	(void) enq_event(DUMMY, 0, False, SLOW);
+	(void) enq_event(QUIT, 0, False, SLOW);
+}
+
+static void
+enq_delay(void)
+{
+	(void) enq_event(DUMMY, 0, False, VERY_SLOW);
 }
 
 /*
@@ -1563,7 +1632,7 @@ next(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 		ccard = ccard->next;
 		set_posw(0);
 	} else
-		new_card();
+		new_card(False);
 }
 
 static void
@@ -1604,18 +1673,27 @@ discard(Widget w, XtPointer client_data, XtPointer call_data)
 
 }
 
+/* Scroll the current card off to the left. */
+static void
+card_complete(void)
+{
+	int i;
+
+	for (i = col; i < N_COLS; i++)
+		enq_event(RIGHT, 0, False, FAST);
+	for (i = 0; i < N_COLS/2 + 2; i++)
+		enq_event(PAN_RIGHT, 0, False, FAST);
+}
+
 /* Generate a fresh card. */
 static void
-new_card(void)
+new_card(Boolean always_scroll)
 {
 	int i;
 
 	/* Scroll the previous card away. */
-	if (ccard) {
-		for (i = col; i < N_COLS; i++)
-			enq_event(RIGHT, 0, False, FAST);
-		for (i = 0; i < N_COLS/2 + 2; i++)
-			enq_event(PAN_RIGHT, 0, False, FAST);
+	if (ccard || always_scroll) {
+		card_complete();
 	}
 
 	enq_event(NEWCARD, False, False, FAST);
