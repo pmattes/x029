@@ -1265,6 +1265,9 @@ do_newcard(int replace)
 		ccard = c;
 		c->seq = line_number;
 		line_number += 10;
+	} else if (appres.batch) {
+		ccard->seq = line_number;
+		line_number += 10;
 	}
 	(void) memset(ccard->coltxt, ' ', sizeof(ccard->coltxt));
 	(void) memset(ccard->holes, 0, sizeof(ccard->holes));
@@ -1734,7 +1737,7 @@ card_complete(int delay)
 
 	for (i = col; i < N_COLS; i++)
 		enq_event(RIGHT, 0, False, delay);
-	for (i = 0; i < N_COLS/2 + 2; i++)
+	for (i = 0; i < N_COLS/2 + 10; i++)
 		enq_event(PAN_RIGHT, 0, False, delay);
 }
 
@@ -2132,7 +2135,8 @@ batch_fsm(void)
 				bs = BS_SPACE;
 			else {
 				add_char(c);
-				if (col >= N_COLS - 1)
+				if (col >= (appres.autonumber? (N_COLS - 1 - 8):
+							       (N_COLS - 1)))
 					bs = BS_SPACE;
 			}
 			break;
