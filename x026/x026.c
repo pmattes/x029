@@ -580,7 +580,7 @@ static XtResource resources[] = {
 	{ "autoNumber", "AutoNumber", XtRBoolean, sizeof(Boolean),
 	  offset(autonumber), XtRString, "True" },
 	{ "typeahead", "Typeahead", XtRBoolean, sizeof(Boolean),
-	  offset(typeahead), XtRString, "False" },
+	  offset(typeahead), XtRString, "True" },
 	{ "charset", "Charset", XtRString, sizeof(String),
 	  offset(charset), XtRString, "bcd-h" },
 	{ "card", "Card", XtRString, sizeof(String),
@@ -664,7 +664,6 @@ usage(void)
 	fprintf(stderr, "x026-options:\n\
   -ifont <font>    Interpreter (card edge) font, defaults to 7x13\n\
   -nonumber        Do not automatically number cards in cols 73..80\n\
-  -typeahead       Allow typeahead (very un-026-like)\n\
   -charset <name>  Keypunch character set:\n");
 	for (i = 0; charsets[i].name != NULL; i++)
 		fprintf(stderr, "    %-9s %s\n",
@@ -679,6 +678,8 @@ usage(void)
   -026comm         Alias for '-charset bcd-a'\n\
   -029             Alias for '-charset 029'\n\
   -EBCDIC          Alias for '-charset ebcdic'\n\
+  -batch <file>    Read text file and punch it (automated display)\n\
+  -batch -         Read stdin and punch it\n\
   -help            Display this text\n");
 	exit(1);
 }
@@ -818,11 +819,12 @@ main(int argc, char *argv[])
 
 struct button {
 	char *label;
+	Boolean batch_disable;
 	void (*callback)(int);
 } button[] = {
-	{ "Off", (void (*)())exit },
-	{ "Save", save },
-	{ NULL, NULL },
+	{ "Off", False, (void (*)())exit },
+	{ "Save", True, save },
+	{ NULL, False, NULL },
 };
 
 /* Callback function for buttons. */
@@ -1014,6 +1016,7 @@ define_widgets(void)
 		    XtNy, card_height + 2*CARD_AIR + SWITCH_SKIP + BUTTON_GAP,
 		    XtNborderWidth, BUTTON_BW,
 		    XtNborderColor, appres.background,
+		    XtNsensitive, !(button[i].batch_disable && appres.batch),
 		    NULL
 		);
 		XtAddCallback(ww, XtNcallback, button_callback,
@@ -1043,6 +1046,7 @@ define_widgets(void)
 	    XtNheight, BUTTON_HEIGHT,
 	    XtNborderWidth, BUTTON_BW,
 	    XtNborderColor, appres.background,
+	    XtNsensitive, !appres.batch,
 	    NULL);
 	XtAddCallback(ww, XtNcallback, discard, NULL);
 
@@ -1246,6 +1250,9 @@ static void
 do_newcard(int replace)
 {
 	int i;
+
+	if (appres.batch)
+		replace = True;
 
 	if (!ccard || !replace) {
 		card *c;
@@ -2117,12 +2124,11 @@ batch_fsm(void)
 			break;
 
 		case BS_CHAR:
-			while ((c = *s++) != '\0' && c < ' ') {
-			}
+			c = *s++;
 			if (appres.debug)
 				printf(" c = 0x%02x, col = %d\n",
 					c & 0xff, col);
-			if (c == '\0')
+			if (c == '\n')
 				bs = BS_SPACE;
 			else {
 				add_char(c);
