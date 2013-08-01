@@ -506,6 +506,8 @@ static Pixmap		hole_pixmap;
 struct charset		*ccharset = NULL;
 struct card_type	*ccard_type = NULL;
 
+FILE			*batchfile = NULL;
+
 /* Internal actions. */
 static void do_nothing(int);
 static void do_data(int);
@@ -535,6 +537,7 @@ typedef struct {
 	Boolean	autonumber;
 	Boolean	typeahead;
 	Boolean	help;
+	Boolean debug;
 } AppRes, *AppResptr;
 
 static AppRes appres;
@@ -554,6 +557,7 @@ static XrmOptionDescRec options[]= {
 	{ "-026comm",	".charset",	XrmoptionNoArg,		"bcd-a" },
 	{ "-029",	".charset",	XrmoptionNoArg,		"029" },
 	{ "-EBCDIC",	".charset",	XrmoptionNoArg,		"ebcdic" },
+	{ "-debug",	".debug",	XrmoptionNoArg,		"True" },
 	
 	{ "-help",	".help",	XrmoptionNoArg,		"True" },
 };
@@ -583,6 +587,8 @@ static XtResource resources[] = {
 	  offset(card), XtRString, "collins" },
 	{ "batch", "Batch", XtRString, sizeof(String),
 	  offset(batch), XtRString, NULL },
+	{ "debug", "Debug", XtRBoolean, sizeof(Boolean),
+	  offset(debug), XtRString, "False" },
 	{ "help", "Help", XtRBoolean, sizeof(Boolean),
 	  offset(help), XtRString, "False" },
 };
@@ -635,12 +641,17 @@ int actioncount = XtNumber(actions);
 
 /* Forward references. */
 static void define_widgets(void);
-static void new_card(Boolean always_scroll);
+#define NC_ALWAYS_SCROLL	True
+#define NC_SCROLL_IF_CARD	False
+#define NC_INTERACTIVE		True
+#define NC_BATCH		False
+static void new_card(Boolean always_scroll, Boolean interactive);
 static void save_popup(void);
 static Boolean add_char(char c);
 static void enq_quit(void);
 static void enq_delay(void);
-static void card_complete(void);
+static void card_complete(int delay);
+static void batch_fsm(void);
 
 /* Syntax. */
 void
@@ -783,34 +794,17 @@ main(int argc, char *argv[])
 		char buf[1024];
 		Boolean any = False;
 
-		f = fopen(appres.batch, "r");
-		if (f == NULL) {
-			perror(appres.batch);
-			exit(1);
-		}
-		while (fgets(buf, sizeof(buf), f) != NULL) {
-			char *s = buf;
-			char c;
-
-			if (any)
-				enq_delay();
-			new_card(any);
-			enq_delay();
-			any = True;
-			buf[80] = '\0';
-			while ((c = *s++) != '\0') {
-				if (c < ' ') {
-					continue;
-				}
-				add_char(c);
+		if (strcmp(appres.batch, "-")) {
+			batchfile = fopen(appres.batch, "r");
+			if (batchfile == NULL) {
+				perror(appres.batch);
+				exit(1);
 			}
-		}
-		fclose(f);
-		if (any)
-			card_complete();
-		enq_quit();
+		} else
+			batchfile = stdin;
+		batch_fsm();
 	} else {
-		new_card(False);
+		new_card(NC_SCROLL_IF_CARD, NC_BATCH);
 	}
 
 	/* Process X events forever. */
@@ -1363,8 +1357,8 @@ first_card(void)
 {
 	card *c;
 
-	for (c = ccard; c && c->prev; c = c->prev)
-		;
+	for (c = ccard; c && c->prev; c = c->prev) {
+	}
 	return c;
 }
 
@@ -1489,7 +1483,6 @@ do_quit(int ignored)
 /*
  * Event queueing: Inserting artificial delays in processing certain events.
  */
-#define N_EVENTS	500000
 enum evtype { DUMMY, DATA, MULTI, LEFT, RIGHT, HOME,
 	      PAN_RIGHT, PAN_LEFT, PAN_UP, SLAM, NEWCARD, QUIT };
 void (*eq_fn[])(int) = {
@@ -1506,6 +1499,10 @@ void (*eq_fn[])(int) = {
 	do_newcard,
 	do_quit
 };
+char *eq_name[] = {
+	"DUMMY", "DATA", "MULTI", "LEFT", "RIGHT", "HOME",
+	"PAN_RIGHT", "PAN_LEFT", "PAN_UP", "SLAM", "NEWCARD", "QUIT"
+};
 typedef struct event {
 	struct event *next;
 	enum evtype evtype;
@@ -1516,26 +1513,59 @@ event_t *eq_first, *eq_last;
 int eq_count;
 
 static void
+dump_queue(const char *when)
+{
+	event_t *e;
+
+	if (!appres.debug)
+		return;
+
+	printf("queue(%s):", when);
+
+	for (e = eq_first; e != NULL; e = e->next) {
+		printf(" %s(%d)%s",  eq_name[e->evtype], e->delay,
+			e == eq_last? "*": "");
+	}
+	printf("\n");
+}
+
+/* Run the event at the front of the queue. */
+static void
 deq_event(XtPointer data, XtIntervalId *id)
 {
-	int delay;
 	event_t *e;
 
 	if (!eq_count)
 		return;
 
+	/* Dequeue it. */
 	e = eq_first;
 	eq_first = e->next;
 	if (eq_first == NULL)
 		eq_last = NULL;
+	dump_queue("deq");
 
+	/* Run it. */
+	if (appres.debug)
+		printf("run %s(%d)\n", eq_name[e->evtype], e->delay);
 	(*eq_fn[e->evtype])(e->param);
-	delay = e->delay;
-	if (--eq_count)
-		(void) XtAppAddTimeOut(appcontext, delay, deq_event, NULL);
+
+	/* Free it. */
 	XtFree((XtPointer)e);
+	e = NULL;
+
+	/*
+	 * If there are more events, schedule the next one.
+	 * Otherwise, see if the batch FSM needs cranking.
+	 */
+	if (--eq_count)
+		(void) XtAppAddTimeOut(appcontext, eq_first->delay, deq_event,
+			NULL);
+	else if (appres.batch)
+		batch_fsm();
 }
 
+/* Add an event to the back of the queue. */
 static Boolean
 enq_event(enum evtype evtype, unsigned char param, Boolean restricted, int delay)
 {
@@ -1552,12 +1582,13 @@ enq_event(enum evtype evtype, unsigned char param, Boolean restricted, int delay
 	e->param = param;
 	e->delay = delay;
 
-	e->next = eq_last;
+	e->next = NULL;
 	if (eq_first == NULL)
 		eq_first = e;
 	if (eq_last != NULL)
 		eq_last->next = e;
 	eq_last = e;
+	dump_queue("enq");
 
 	if (!eq_count++)
 		(void) XtAppAddTimeOut(appcontext, delay, deq_event, NULL);
@@ -1647,7 +1678,7 @@ next(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 		ccard = ccard->next;
 		set_posw(0);
 	} else
-		new_card(False);
+		new_card(NC_SCROLL_IF_CARD, NC_INTERACTIVE);
 }
 
 static void
@@ -1690,25 +1721,25 @@ discard(Widget w, XtPointer client_data, XtPointer call_data)
 
 /* Scroll the current card off to the left. */
 static void
-card_complete(void)
+card_complete(int delay)
 {
 	int i;
 
 	for (i = col; i < N_COLS; i++)
-		enq_event(RIGHT, 0, False, FAST);
+		enq_event(RIGHT, 0, False, delay);
 	for (i = 0; i < N_COLS/2 + 2; i++)
-		enq_event(PAN_RIGHT, 0, False, FAST);
+		enq_event(PAN_RIGHT, 0, False, delay);
 }
 
 /* Generate a fresh card. */
 static void
-new_card(Boolean always_scroll)
+new_card(Boolean always_scroll, Boolean interactive)
 {
 	int i;
 
 	/* Scroll the previous card away. */
 	if (ccard || always_scroll) {
-		card_complete();
+		card_complete(interactive? FAST: SLOW);
 	}
 
 	enq_event(NEWCARD, False, False, FAST);
@@ -2030,4 +2061,92 @@ save_popup(void)
 		    NULL);
 	XtPopup(save_shell, XtGrabExclusive);
 	/*XSetWMProtocols(display, XtWindow(save_shell), &delete_me, 1);*/
+}
+
+/* Batch processing. */
+typedef enum {
+	BS_READ,	/* need to read from the file */
+	BS_CHAR,	/* need to process a character from the file */
+	BS_SPACE,	/* need to space over the rest of the card */
+	BS_EOF		/* done */
+} batch_state_t;
+static const char *bs_name[] = { "READ", "CHAR", "SPACE", "EOF" };
+static batch_state_t bs = BS_READ;
+
+/*
+ * Crank the batch FSM.
+ */
+static void
+batch_fsm(void)
+{
+	static char buf[1024];
+	static char *s;
+	static Boolean any = False;
+	char c;
+
+	do {
+		if (appres.debug)
+			printf("batch_fsm: %s\n", bs_name[bs]);
+
+		switch (bs) {
+
+		case BS_READ:
+			/* Read the next card. */
+			if (fgets(buf, sizeof(buf), batchfile) == NULL) {
+				fclose(batchfile);
+				batchfile = NULL;
+				if (any)
+					card_complete(SLOW);
+				enq_quit();
+
+				/* Next, exit. */
+				bs = BS_EOF;
+				break;
+			}
+			s = buf;
+
+			/* Pull down a new card to punch. */
+			if (!ccard || col != 0) {
+				new_card(False, NC_BATCH);
+				enq_delay();
+			}
+
+			/* Next, start munching on it. */
+			any = True;
+			bs = BS_CHAR;
+			break;
+
+		case BS_CHAR:
+			while ((c = *s++) != '\0' && c < ' ') {
+			}
+			if (appres.debug)
+				printf(" c = 0x%02x, col = %d\n",
+					c & 0xff, col);
+			if (c == '\0')
+				bs = BS_SPACE;
+			else {
+				add_char(c);
+				if (col >= N_COLS - 1)
+					bs = BS_SPACE;
+			}
+			break;
+
+		case BS_SPACE:
+			if (appres.debug)
+				printf(" col = %d\n", col);
+			if (col == 0) {
+				bs = BS_READ;
+				break;
+			}
+			add_char(' ');
+			if (col >= N_COLS - 1)
+				bs = BS_READ;
+			break;
+
+		case BS_EOF:
+			exit(0);
+			break;
+		}
+	} while (eq_first == NULL);
+
 }
