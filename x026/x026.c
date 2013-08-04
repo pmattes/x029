@@ -15,6 +15,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <fcntl.h>
 #include <X11/Intrinsic.h>
 #include <X11/StringDefs.h>
 #include <X11/Core.h>
@@ -506,7 +507,14 @@ static Pixmap		hole_pixmap;
 struct charset		*ccharset = NULL;
 struct card_type	*ccard_type = NULL;
 
-FILE			*batchfile = NULL;
+int			batchfd = -1;
+
+typedef enum {
+	M_INTERACTIVE,	/* interactive */
+	M_BATCH,	/* read from a fixed file */
+	M_REMOTECTL	/* read from stdin incrementally */
+} imode_t;
+imode_t mode = M_INTERACTIVE;
 
 /* Internal actions. */
 static void do_nothing(int);
@@ -533,9 +541,10 @@ typedef struct {
 	char	*ifontname;
 	char	*charset;
 	char	*card;
-	char	*batch;
+	char	*batchfile;
 	Boolean	autonumber;
 	Boolean	typeahead;
+	Boolean remotectl;
 	Boolean	help;
 	Boolean debug;
 } AppRes, *AppResptr;
@@ -550,7 +559,8 @@ static XrmOptionDescRec options[]= {
 	{ "-mono",	".cabinet",	XrmoptionNoArg,		"black" },
 	{ "-charset",	".charset",	XrmoptionSepArg,	NULL },
 	{ "-card",	".card",	XrmoptionSepArg,	NULL },
-	{ "-batch",	".batch",	XrmoptionSepArg,	NULL },
+	{ "-batch",	".batchFile",	XrmoptionSepArg,	NULL },
+	{ "-remotectl",	".remoteCtl",	XrmoptionNoArg,		"True" },
 
 	/* Options compatible with Douglas Jones's tools */
 	{ "-026ftn",	".charset",	XrmoptionNoArg,		"bcd-h" },
@@ -585,8 +595,10 @@ static XtResource resources[] = {
 	  offset(charset), XtRString, "bcd-h" },
 	{ "card", "Card", XtRString, sizeof(String),
 	  offset(card), XtRString, "collins" },
-	{ "batch", "Batch", XtRString, sizeof(String),
-	  offset(batch), XtRString, NULL },
+	{ "batchFile", "BatchFile", XtRString, sizeof(String),
+	  offset(batchfile), XtRString, NULL },
+	{ "remoteCtl", "RemoteCtl", XtRBoolean, sizeof(Boolean),
+	  offset(remotectl), XtRString, "False" },
 	{ "debug", "Debug", XtRBoolean, sizeof(Boolean),
 	  offset(debug), XtRString, "False" },
 	{ "help", "Help", XtRBoolean, sizeof(Boolean),
@@ -645,7 +657,7 @@ static void define_widgets(void);
 #define NC_SCROLL_IF_CARD	False
 #define NC_INTERACTIVE		True
 #define NC_BATCH		False
-static void new_card(Boolean always_scroll, Boolean interactive);
+static void get_new_card(void);
 static void save_popup(void);
 static Boolean add_char(char c);
 static void enq_quit(void);
@@ -680,6 +692,7 @@ usage(void)
   -EBCDIC          Alias for '-charset ebcdic'\n\
   -batch <file>    Read text file and punch it (automated display)\n\
   -batch -         Read stdin and punch it\n\
+  -remotectl       Read stdin incrementally\n\
   -help            Display this text\n");
 	exit(1);
 }
@@ -790,22 +803,41 @@ main(int argc, char *argv[])
 	audio_init();
 #endif /*]*/
 
-	if (appres.batch) {
-		FILE *f;
-		char buf[1024];
-		Boolean any = False;
-
-		if (strcmp(appres.batch, "-")) {
-			batchfile = fopen(appres.batch, "r");
-			if (batchfile == NULL) {
-				perror(appres.batch);
+	if (appres.batchfile != NULL) {
+		if (appres.remotectl) {
+			fprintf(stderr, "Batchfile and remotectl in conflict, "
+				"ignoring remotectl\n");
+		}
+		if (strcmp(appres.batchfile, "-")) {
+			batchfd = open(appres.batchfile, O_RDONLY | O_NONBLOCK);
+			if (batchfd < 0) {
+				perror(appres.batchfile);
 				exit(1);
 			}
-		} else
-			batchfile = stdin;
-		batch_fsm();
+		} else {
+			batchfd = fileno(stdin);
+		}
+		mode = M_BATCH;
+	} else if (appres.remotectl) {
+		mode = M_REMOTECTL;
+		batchfd = fileno(stdin);
 	} else {
-		new_card(NC_SCROLL_IF_CARD, NC_BATCH);
+		mode = M_INTERACTIVE;
+	}
+
+	if (mode != M_INTERACTIVE && batchfd == fileno(stdin)) {
+		if (fcntl(batchfd, F_SETFL,
+			    fcntl(batchfd, F_GETFL) | O_NONBLOCK) < 0) {
+			perror("fcntl");
+			exit(1);
+		}
+	}
+
+	if (mode == M_INTERACTIVE || mode == M_REMOTECTL) {
+		get_new_card();
+	}
+	if (mode != M_INTERACTIVE) {
+		batch_fsm();
 	}
 
 	/* Process X events forever. */
@@ -891,6 +923,7 @@ typedef struct card {
 static card *ccard;
 
 static int col = 0;
+static Boolean card_visible = False;
 static GC gc, invgc, holegc, corner_gc;
 
 static Widget container, porth, scrollw, cardw, posw;
@@ -1016,7 +1049,8 @@ define_widgets(void)
 		    XtNy, card_height + 2*CARD_AIR + SWITCH_SKIP + BUTTON_GAP,
 		    XtNborderWidth, BUTTON_BW,
 		    XtNborderColor, appres.background,
-		    XtNsensitive, !(button[i].batch_disable && appres.batch),
+		    XtNsensitive, !(button[i].batch_disable &&
+				    mode != M_INTERACTIVE),
 		    NULL
 		);
 		XtAddCallback(ww, XtNcallback, button_callback,
@@ -1046,7 +1080,7 @@ define_widgets(void)
 	    XtNheight, BUTTON_HEIGHT,
 	    XtNborderWidth, BUTTON_BW,
 	    XtNborderColor, appres.background,
-	    XtNsensitive, !appres.batch,
+	    XtNsensitive, mode == M_INTERACTIVE,
 	    NULL);
 	XtAddCallback(ww, XtNcallback, discard, NULL);
 
@@ -1156,7 +1190,7 @@ define_widgets(void)
 	    "cursor2", compositeWidgetClass, container,
 	    XtNwidth, CELL_WIDTH,
 	    XtNheight, C2H,
-	    XtNx, CARD_AIR + LEFT_PAD + CELL_X(((N_COLS/2)+1)) + 1,
+	    XtNx, CARD_AIR + LEFT_PAD + CELL_X((N_COLS / 2) + 2) + 4,
 	    XtNy, h-C2H-2 - SWITCH_SKIP,
 	    NULL);
 	XtRealizeWidget(ww);
@@ -1251,7 +1285,7 @@ do_newcard(int replace)
 {
 	int i;
 
-	if (appres.batch)
+	if (mode != M_INTERACTIVE)
 		replace = True;
 
 	if (!ccard || !replace) {
@@ -1265,7 +1299,7 @@ do_newcard(int replace)
 		ccard = c;
 		c->seq = line_number;
 		line_number += 10;
-	} else if (appres.batch) {
+	} else if (mode != M_INTERACTIVE) {
 		ccard->seq = line_number;
 		line_number += 10;
 	}
@@ -1390,8 +1424,6 @@ do_nothing(int ignored)
 static void
 do_data(int c)
 {
-	extern void do_right(int);
-
 	if (col < N_COLS && punch_char(col, c)) {
 		draw_col(col);
 #if defined(SOUND) /*[*/
@@ -1404,8 +1436,6 @@ do_data(int c)
 static void
 do_multipunch(int c)
 {
-	extern void do_right(int);
-
 	if (col < N_COLS && punch_char(col, c)) {
 		draw_col(col);
 #if defined(SOUND) /*[*/
@@ -1417,8 +1447,6 @@ do_multipunch(int c)
 static void
 do_left(int c)
 {
-	extern void do_pan_left(int);
-
 	if (col) {
 		do_pan_left(0);
 		set_posw(col - 1);
@@ -1428,8 +1456,6 @@ do_left(int c)
 static void
 do_right(int do_click)
 {
-	extern void do_pan_right(int);
-
 	if (col < N_COLS-1) {
 		do_pan_right(do_click);
 		set_posw(col + 1);
@@ -1490,11 +1516,24 @@ do_quit(int ignored)
     	exit(0);
 }
 
+static void
+do_invisible(int ignored)
+{
+	card_visible = False;
+}
+
+static void
+do_visible(int ignored)
+{
+	card_visible = True;
+}
+
 /*
  * Event queueing: Inserting artificial delays in processing certain events.
  */
 enum evtype { DUMMY, DATA, MULTI, LEFT, RIGHT, HOME,
-	      PAN_RIGHT, PAN_LEFT, PAN_UP, SLAM, NEWCARD, QUIT };
+	      PAN_RIGHT, PAN_LEFT, PAN_UP, SLAM, NEWCARD, QUIT,
+	      INVISIBLE, VISIBLE };
 void (*eq_fn[])(int) = {
 	do_nothing,
 	do_data,
@@ -1507,11 +1546,14 @@ void (*eq_fn[])(int) = {
 	do_pan_up,
 	do_slam,
 	do_newcard,
-	do_quit
+	do_quit,
+	do_invisible,
+	do_visible
 };
 char *eq_name[] = {
 	"DUMMY", "DATA", "MULTI", "LEFT", "RIGHT", "HOME",
-	"PAN_RIGHT", "PAN_LEFT", "PAN_UP", "SLAM", "NEWCARD", "QUIT"
+	"PAN_RIGHT", "PAN_LEFT", "PAN_UP", "SLAM", "NEWCARD", "QUIT",
+	"INVISIBLE", "VISIBLE"
 };
 typedef struct event {
 	struct event *next;
@@ -1568,10 +1610,12 @@ deq_event(XtPointer data, XtIntervalId *id)
 	 * If there are more events, schedule the next one.
 	 * Otherwise, see if the batch FSM needs cranking.
 	 */
-	if (--eq_count)
+	if (--eq_count) {
+		if (appres.debug)
+			printf("TimeOut(%d)\n", eq_first->delay);
 		(void) XtAppAddTimeOut(appcontext, eq_first->delay, deq_event,
 			NULL);
-	else if (appres.batch)
+	} else if (mode != M_INTERACTIVE)
 		batch_fsm();
 }
 
@@ -1600,8 +1644,11 @@ enq_event(enum evtype evtype, unsigned char param, Boolean restricted, int delay
 	eq_last = e;
 	dump_queue("enq");
 
-	if (!eq_count++)
+	if (!eq_count++) {
+		if (appres.debug)
+			printf("TimeOut(%d)\n", delay);
 		(void) XtAppAddTimeOut(appcontext, delay, deq_event, NULL);
+	}
 	return True;
 }
 
@@ -1614,9 +1661,7 @@ add_char(char c)
 static void
 enq_quit(void)
 {
-	(void) enq_event(DUMMY, 0, False, SLOW);
-	(void) enq_event(DUMMY, 0, False, SLOW);
-	(void) enq_event(QUIT, 0, False, SLOW);
+	(void) enq_event(QUIT, 0, False, SLOW * 2);
 }
 
 static void
@@ -1681,14 +1726,19 @@ home(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 		enq_event(HOME, 0, False, FAST);
 }
 
+/*
+ * Scroll the current card away, and get a new one.
+ */
 static void
 next(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
 	if (ccard->next) {
 		ccard = ccard->next;
 		set_posw(0);
-	} else
-		new_card(NC_SCROLL_IF_CARD, NC_INTERACTIVE);
+	} else {
+		card_complete(FAST);
+		get_new_card();
+	}
 }
 
 static void
@@ -1739,18 +1789,14 @@ card_complete(int delay)
 		enq_event(RIGHT, 0, False, delay);
 	for (i = 0; i < N_COLS/2 + 10; i++)
 		enq_event(PAN_RIGHT, 0, False, delay);
+	enq_event(INVISIBLE, 0, False, 0);
 }
 
 /* Generate a fresh card. */
 static void
-new_card(Boolean always_scroll, Boolean interactive)
+get_new_card(void)
 {
 	int i;
-
-	/* Scroll the previous card away. */
-	if (ccard || always_scroll) {
-		card_complete(interactive? FAST: SLOW);
-	}
 
 	enq_event(NEWCARD, False, False, FAST);
 
@@ -1758,6 +1804,7 @@ new_card(Boolean always_scroll, Boolean interactive)
 	enq_event(SLAM, 0, False, SLOW);
 	for (i = 0; i <= N_ROWS; i++)
 		enq_event(PAN_UP, 0, False, SLOW);
+	enq_event(VISIBLE, 0, False, 0);
 }
 
 #define NP	5
@@ -2082,6 +2129,16 @@ typedef enum {
 } batch_state_t;
 static const char *bs_name[] = { "READ", "CHAR", "SPACE", "EOF" };
 static batch_state_t bs = BS_READ;
+XtInputId read_id = 0;
+
+/* Input is now readable. */
+static void
+read_more(XtPointer closure, int *fd, XtInputId *id)
+{
+	XtRemoveInput(read_id);
+	read_id = 0;
+	batch_fsm();
+}
 
 /*
  * Crank the batch FSM.
@@ -2090,7 +2147,9 @@ static void
 batch_fsm(void)
 {
 	static char buf[1024];
-	static char *s;
+	ssize_t n2r, nr;
+	static ssize_t rbsize = 0;
+	static char *s = buf + sizeof(buf);
 	static Boolean any = False;
 	char c;
 
@@ -2101,24 +2160,47 @@ batch_fsm(void)
 		switch (bs) {
 
 		case BS_READ:
-			/* Read the next card. */
-			if (fgets(buf, sizeof(buf), batchfile) == NULL) {
-				fclose(batchfile);
-				batchfile = NULL;
-				if (any)
-					card_complete(SLOW);
-				enq_quit();
+			/* Keep munching on the same buffer. */
+			if (s < buf + rbsize) {
+				if (appres.debug)
+				    	printf(" continuing, %zd more\n",
+						buf + rbsize - s);
+			} else {
 
-				/* Next, exit. */
-				bs = BS_EOF;
-				break;
-			}
-			s = buf;
+				/* Read the next card. */
+				nr = read(batchfd, buf, sizeof(buf));
+				if (appres.debug)
+					printf(" got %zd chars\n", nr);
+				if (nr == 0) {
+					if (read_id != 0) {
+						XtRemoveInput(read_id);
+						read_id = 0;
+					}
+					close(batchfd);
+					batchfd = -1;
+					enq_quit();
 
-			/* Pull down a new card to punch. */
-			if (!ccard || col != 0) {
-				new_card(False, NC_BATCH);
-				enq_delay();
+					/* Next, exit. */
+					bs = BS_EOF;
+					break;
+				}
+				if (nr < 0) {
+					if (errno == EWOULDBLOCK) {
+						if (read_id == 0)
+							read_id = XtAppAddInput(
+								appcontext,
+								batchfd,
+								(XtPointer)
+								 XtInputReadMask,
+								read_more, NULL);
+						return;
+					} else {
+						perror("read(stdin)");
+						exit(1);
+					}
+				}
+				rbsize = nr;
+				s = buf;
 			}
 
 			/* Next, start munching on it. */
@@ -2127,33 +2209,77 @@ batch_fsm(void)
 			break;
 
 		case BS_CHAR:
+			if (!card_visible) {
+				get_new_card();
+				if (mode == M_BATCH) {
+					enq_delay();
+				}
+				break;
+			}
 			c = *s++;
 			if (appres.debug)
 				printf(" c = 0x%02x, col = %d\n",
 					c & 0xff, col);
-			if (c == '\n')
+			if (c == '\n') {
+				/*
+				 * End of input line.
+				 *
+				 * Delay if there is anything to see; start
+				 * spacing to the end of the card.
+				 */
+				if (col)
+					enq_delay();
 				bs = BS_SPACE;
-			else {
-				add_char(c);
-				if (col >= (appres.autonumber? (N_COLS - 1 - 8):
-							       (N_COLS - 1)))
-					bs = BS_SPACE;
+				break;
+			}
+			add_char(c);
+			if (s >= buf + rbsize) {
+				/*
+				 * Ran out of buffer without a newline.
+				 *
+				 * Go read some more.
+				 */
+				bs = BS_READ;
+				continue;
+			}
+			if (col >= (appres.autonumber? (N_COLS - 1 - 8):
+						       (N_COLS - 1))) {
+				/*
+				 * Overflowed the card.
+				 *
+				 * Eat the character.
+				 */
+				continue;
 			}
 			break;
 
 		case BS_SPACE:
 			if (appres.debug)
 				printf(" col = %d\n", col);
-			if (col == 0) {
+
+			if (col >= N_COLS - 1) {
+				/* End of card.  Scroll it away. */
+				card_complete(SLOW);
+
+				/*
+				 * In remote control mode, create a new card.
+				 * In batch mode, wait for data before
+				 * doing it.
+				 */
+				if (mode == M_REMOTECTL) {
+					get_new_card();
+				}
+
 				bs = BS_READ;
 				break;
 			}
+
+			/* Add a space. */
 			add_char(' ');
-			if (col >= N_COLS - 1)
-				bs = BS_READ;
 			break;
 
 		case BS_EOF:
+			/* Done. */
 			exit(0);
 			break;
 		}
