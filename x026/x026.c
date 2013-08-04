@@ -1020,7 +1020,7 @@ define_widgets(void)
 	scrollw = XtVaCreateManagedWidget(
 	    "scroll", compositeWidgetClass, porth,
 	    XtNwidth, card_width * 3,
-	    XtNheight, card_height * 3,
+	    XtNheight, card_height * 4,
 	    XtNx, SCROLLW_X(),
 	    XtNy, -(2*card_height + TOP_PAD),
 	    XtNbackground, appres.cabinet,
@@ -1275,7 +1275,10 @@ set_posw(int c)
 	static char bb[3];
 
 	col = c;
-	(void) sprintf(bb, "%02d", col+1);
+	if (col >= N_COLS)
+		strcpy(bb, "--");
+	else
+		sprintf(bb, "%02d", col+1);
 	XtVaSetValues(posw, XtNlabel, bb, NULL);
 }
 
@@ -1456,7 +1459,7 @@ do_left(int c)
 static void
 do_right(int do_click)
 {
-	if (col < N_COLS-1) {
+	if (col < N_COLS) {
 		do_pan_right(do_click);
 		set_posw(col + 1);
 	}
