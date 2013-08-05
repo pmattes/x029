@@ -38,7 +38,7 @@ all::
 
 # platform:  $XFree86: xc/config/cf/linux.cf,v 3.220 2003/12/30 22:38:33 tsi Exp $
 
-# operating system:  Linux 3.2.0-41-generic x86_64 [ELF] (3.2.0)
+# operating system:  Linux 3.2.0-48-generic x86_64 [ELF] (3.2.0)
 # libc:	(6.15.0)
 # binutils:	(222)
 
@@ -1041,8 +1041,8 @@ CXXPROJECT_DEFINES =
 # start of Imakefile
 
 LOCAL_LIBRARIES = $(XAWLIB) $(XMULIB) $(XPMLIB) $(XTOOLLIB) $(XLIB)
-SRCS = x026.c
-OBJS = x026.o
+SRCS = x026.c charset.c
+OBJS = x026.o charset.o
 
         PROGRAM = x026
 

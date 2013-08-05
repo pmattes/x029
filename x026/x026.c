@@ -26,6 +26,8 @@
 #include <X11/Xaw/Porthole.h>
 #include <X11/xpm.h>
 
+#include "charset.h"
+
 #include "collins.xpm"		/* card image */
 #include "carnegie2.xpm"	/* card image */
 #include "ibm.xpm"		/* card image */
@@ -39,375 +41,6 @@
 
 /* Symbolic code for 'no such translation.' */
 #define NS	0xffffffffU
-
-/*
- * Character sets.
- * A character set is a 256-element mapping from ISO 8859-1 to punched
- * card code.  The card codes are defined per Douglas Jones's convention:
- *   numeric 9	00001
- *   numeric 8  00002
- *   numeric 7  00004
- *   numeric 6  00010
- *   numeric 5  00020
- *   numeric 4  00040
- *   numeric 3  00100
- *   numeric 2  00200
- *   numeric 1  00400
- *   zone 10    01000
- *   zone 11    02000
- *   zone 12    04000
- *
- * Some definitions are incomplete, for characters which are not represented
- * in ISO 8859-1.  When this program has an interactive keyboard, these will
- * probably be added.
- *
- * There is also no attempt to map control codes between 8859-1 and punched
- * card code.
- */
-enum {
-    PTYPE_NONPRINTING = 0,
-    PTYPE_026_COMMERCIAL = 0x08,
-    PTYPE_026_FORTRAN = 0x10,
-    PTYPE_029 = 0x20
-} punch_type_t;
-
-struct charset {
-	char *name;
-	char *description;
-	unsigned char punch_type; /* for image save */
-	unsigned charset[256];
-} charsets[] = {
-    /* 026 keypunch FORTRAN, the default. */
-    { "bcd-h", "026 FORTRAN (default)", PTYPE_026_FORTRAN,
-      {    NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-        00000,    NS,    NS,    NS, 02102,    NS,    NS, 00042, /*  !"#$%&' */
-        01042, 04042, 02042, 04000, 01102, 02000, 04102, 01400, /* ()*+,-./ */
-        01000, 00400, 00200, 00100, 00040, 00020, 00010, 00004, /* 01234567 */
-        00002, 00001,    NS,    NS,    NS, 00102,    NS,    NS, /* 89:;<=>? */
-           NS, 04400, 04200, 04100, 04040, 04020, 04010, 04004, /* @ABCDEFG */
-        04002, 04001, 02400, 02200, 02100, 02040, 02020, 02010, /* HIJKLMNO */
-        02004, 02002, 02001, 01200, 01100, 01040, 01020, 01010, /* PQRSTUVW */
-        01004, 01002, 01001,    NS,    NS,    NS,    NS,    NS, /* XYZ[\]^_ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* `abcdefg */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* hijklmno */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* pqrstuvw */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* xyz{|}~  */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*  ¡¢£¤¥¦§ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ¨©ª«¬­®¯ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* °±²³´µ¶· */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ¸¹º»¼½¾¿ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ÀÁÂÃÄÅÆÇ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ÈÉÊËÌÍÎÏ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ÐÑÒÓÔÕÖ× */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ØÙÚÛÜÝÞß */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* àáâãäåæç */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* èéêëìíîï */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ðñòóôõö÷ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS  /* øùúûüýþÿ */
-      }
-    },
-    /* Original S/360 EBCDIC. */
-    { "ebcdic", "S/360 EBCDIC", PTYPE_029,
-      {    NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-        00000, 04006, 00006, 00102, 02102, 01042, 04000, 00022, /*  !"#$%&' */
-        04022, 02022, 02042, 04012, 01102, 02000, 04102, 01400, /* ()*+,-./ */
-        01000, 00400, 00200, 00100, 00040, 00020, 00010, 00004, /* 01234567 */
-        00002, 00001, 00202, 02012, 04042, 00012, 01012, 01006, /* 89:;<=>? */
-        00042, 04400, 04200, 04100, 04040, 04020, 04010, 04004, /* @ABCDEFG */
-        04002, 04001, 02400, 02200, 02100, 02040, 02020, 02010, /* HIJKLMNO */
-        02004, 02002, 02001, 01200, 01100, 01040, 01020, 01010, /* PQRSTUVW */
-        01004, 01002, 01001,    NS,    NS,    NS,    NS, 01022, /* XYZ[\]^_ */
-           NS, 05400, 05200, 05100, 05040, 05020, 05010, 05004, /* `abcdefg */
-        05002, 05001, 06400, 06200, 06100, 06040, 06020, 06010, /* hijklmno */
-        06004, 06002, 06001, 03200, 03100, 03040, 03020, 03010, /* pqrstuvw */
-        03004, 03002, 03001,    NS, 04006,    NS,    NS,    NS, /* xyz{|}~  */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS, 04202,    NS,    NS,    NS,    NS,    NS, /*  ¡¢£¤¥¦§ */
-           NS,    NS,    NS,    NS, 02006,    NS,    NS,    NS, /* ¨©ª«¬­®¯ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* °±²³´µ¶· */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ¸¹º»¼½¾¿ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ÀÁÂÃÄÅÆÇ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ÈÉÊËÌÍÎÏ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ÐÑÒÓÔÕÖ× */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ØÙÚÛÜÝÞß */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* àáâãäåæç */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* èéêëìíîï */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ðñòóôõö÷ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS  /* øùúûüýþÿ */
-      }
-    },
-    /* 026 keypunch commercial. */
-    { "bcd-a", "026 commercial", PTYPE_026_COMMERCIAL,
-      {    NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-        00000,    NS,    NS, 00102, 02102, 01042, 04000,    NS, /*  !"#$%&' */
-           NS,    NS, 02042,    NS, 01102, 02000, 04102, 01400, /* ()*+,-./ */
-        01000, 00400, 00200, 00100, 00040, 00020, 00010, 00004, /* 01234567 */
-        00002, 00001,    NS,    NS,    NS,    NS,    NS,    NS, /* 89:;<=>? */
-        00042, 04400, 04200, 04100, 04040, 04020, 04010, 04004, /* @ABCDEFG */
-        04002, 04001, 02400, 02200, 02100, 02040, 02020, 02010, /* HIJKLMNO */
-        02004, 02002, 02001, 01200, 01100, 01040, 01020, 01010, /* PQRSTUVW */
-        01004, 01002, 01001,    NS,    NS,    NS,    NS,    NS, /* XYZ[\]^_ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* `abcdefg */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* hijklmno */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* pqrstuvw */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* xyz{|}~  */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS, 04042,    NS,    NS,    NS, /*  ¡¢£¤¥¦§ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ¨©ª«¬­®¯ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* °±²³´µ¶· */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ¸¹º»¼½¾¿ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ÀÁÂÃÄÅÆÇ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ÈÉÊËÌÍÎÏ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ÐÑÒÓÔÕÖ× */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ØÙÚÛÜÝÞß */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* àáâãäåæç */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* èéêëìíîï */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ðñòóôõö÷ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS  /* øùúûüýþÿ */
-      }
-    },
-    /* IBM 1401. */
-    { "1401", "IBM 1401", PTYPE_NONPRINTING,
-      {    NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-        00000, 03002, 01006, 00102, 02102, 01042, 04000, 01012, /*  !"#$%&' */
-        04022, 02022, 02042,    NS, 01102, 02000, 04102, 01400, /* ()*+,-./ */
-        01000, 00400, 00200, 00100, 00040, 00020, 00010, 00004, /* 01234567 */
-        00002, 00001, 00022, 02012, 04012, 01022, 00012, 05000, /* 89:;<=>? */
-        00042, 04400, 04200, 04100, 04040, 04020, 04010, 04004, /* @ABCDEFG */
-        04002, 04001, 02400, 02200, 02100, 02040, 02020, 02010, /* HIJKLMNO */
-        02004, 02002, 02001, 01200, 01100, 01040, 01020, 01010, /* PQRSTUVW */
-        01004, 01002, 01001,    NS,    NS,    NS,    NS,    NS, /* XYZ[\]^_ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* `abcdefg */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* hijklmno */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* pqrstuvw */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* xyz{|}~  */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS, 04042,    NS,    NS, 04006, /*  ¡¢£¤¥¦§ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ¨©ª«¬­®¯ */
-           NS, 01202,    NS,    NS,    NS,    NS,    NS,    NS, /* °±²³´µ¶· */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ¸¹º»¼½¾¿ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ÀÁÂÃÄÅÆÇ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ÈÉÊËÌÍÎÏ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ÐÑÒÓÔÕÖ× */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ØÙÚÛÜÝÞß */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* àáâãäåæç */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* èéêëìíîï */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ðñòóôõö÷ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* øùúûüýþÿ */
-      }
-    },
-    /* 029 keypunch. */
-    { "029", "029 standard", PTYPE_029,
-      {    NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-        00000, 03002, 00006, 00102, 02102, 01042, 04000, 00022, /*  !"#$%&' */
-        04022, 02022, 02042, 04012, 01102, 02000, 04102, 01400, /* ()*+,-./ */
-        01000, 00400, 00200, 00100, 00040, 00020, 00010, 00004, /* 01234567 */
-        00002, 00001, 00202, 02012, 04042, 00012, 01012, 01006, /* 89:;<=>? */
-        00042, 04400, 04200, 04100, 04040, 04020, 04010, 04004, /* @ABCDEFG */
-        04002, 04001, 02400, 02200, 02100, 02040, 02020, 02010, /* HIJKLMNO */
-        02004, 02002, 02001, 01200, 01100, 01040, 01020, 01010, /* PQRSTUVW */
-        01004, 01002, 01001,    NS,    NS,    NS,    NS, 01022, /* XYZ[\]^_ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* `abcdefg */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* hijklmno */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* pqrstuvw */
-           NS,    NS,    NS,    NS, 04006,    NS,    NS,    NS, /* xyz{|}~  */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS, 05000,    NS,    NS,    NS,    NS,    NS, /*  ¡¢£¤¥¦§ */
-           NS,    NS,    NS,    NS, 02006,    NS,    NS,    NS, /* ¨©ª«¬­®¯ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* °±²³´µ¶· */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ¸¹º»¼½¾¿ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ÀÁÂÃÄÅÆÇ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ÈÉÊËÌÍÎÏ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ÐÑÒÓÔÕÖ× */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ØÙÚÛÜÝÞß */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* àáâãäåæç */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* èéêëìíîï */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ðñòóôõö÷ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS /* øùúûüýþÿ */
-      }
-    },
-    /* DEC 026 (historical, no lowercase) */
-    { "dec026", "DEC 026 ASCII", PTYPE_026_FORTRAN,
-      {
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-        00000, 04006, 01022, 01012, 02102, 01006, 02006, 00012, /*  !"#$%&' */
-        01042, 04042, 02042, 04000, 01102, 02000, 04102, 01400, /* ()*+,-./ */
-        01000, 00400, 00200, 00100, 00040, 00020, 00010, 00004, /* 01234567 */
-        00002, 00001, 02202, 01202, 04012, 00102, 02012, 04202, /* 89:;<=>? */
-        00042, 04400, 04200, 04100, 04040, 04020, 04010, 04004, /* @ABCDEFG */
-        04002, 04001, 02400, 02200, 02100, 02040, 02020, 02010, /* HIJKLMNO */
-        02004, 02002, 02001, 01200, 01100, 01040, 01020, 01010, /* PQRSTUVW */
-        01004, 01002, 01001, 02022, 00006, 04022, 00022, 00202, /* XYZ[\]^_ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* `abcdefg */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* hijklmno */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* pqrstuvw */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* xyz{|}~  */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-      }
-    },
-    /* DEC 029 (historical, no lowercase). */
-    { "dec029", "DEC 029 ASCII", PTYPE_029,
-      {
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-        00000, 04006, 00006, 00102, 02102, 01042, 04000, 00022, /*  !"#$%&' */
-        04022, 02022, 02042, 04012, 01102, 02000, 04102, 01400, /* ()*+,-./ */
-        01000, 00400, 00200, 00100, 00040, 00020, 00010, 00004, /* 01234567 */
-        00002, 00001, 00202, 02012, 02042, 00012, 01012, 01006, /* 89:;<=>? */
-        00042, 04400, 04200, 04100, 04040, 04020, 04010, 04004, /* @ABCDEFG */
-        04002, 04001, 02400, 02200, 02100, 02040, 02020, 02010, /* HIJKLMNO */
-        02004, 02002, 02001, 01200, 01100, 01040, 01020, 01010, /* PQRSTUVW */
-        01004, 01002, 01001, 04202, 01202, 02202, 02006, 01022, /* XYZ[\]^_ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* `abcdefg */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* hijklmno */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* pqrstuvw */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* xyz{|}~  */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-      }
-    },
-    /* DEC 026 with control characters and lowercase. */
-    { "dec026-full", "DEC 026 with lowercase and control chars",
-	PTYPE_026_FORTRAN,
-      {
-        05403, 04401, 04201, 04101, 00005, 01023, 01013, 01007, 
-        02011, 04021, 01021, 04103, 04043, 04023, 04013, 04007, 
-        06403, 02401, 02201, 02101, 00043, 00023, 00201, 01011, 
-        02003, 02403, 00007, 01005, 02043, 02023, 02013, 02007, 
-        00000, 04006, 01022, 01012, 02102, 01006, 02006, 00012, 
-        01042, 04042, 02042, 04000, 01102, 02000, 04102, 01400, 
-        01000, 00400, 00200, 00100, 00040, 00020, 00010, 00004, 
-        00002, 00001, 02202, 01202, 04012, 00102, 02012, 04202, 
-        00042, 04400, 04200, 04100, 04040, 04020, 04010, 04004, 
-        04002, 04001, 02400, 02200, 02100, 02040, 02020, 02010, 
-        02004, 02002, 02001, 01200, 01100, 01040, 01020, 01010, 
-        01004, 01002, 01001, 02022, 00006, 04022, 00022, 00202, 
-        00402, 05400, 05200, 05100, 05040, 05020, 05010, 05004, 
-        05002, 05001, 06400, 06200, 06100, 06040, 06020, 06010, 
-        06004, 06002, 06001, 03200, 03100, 03040, 03020, 03010, 
-        03004, 03002, 03001, 05000, 06000, 03000, 03400, 04005, 
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-      }
-    },
-    /* DEC 029 with control characters and lowercase. */
-    { "dec029-full", "DEC 029 with lowercase and control chars", PTYPE_029,
-      {
-        05403, 04401, 04201, 04101, 00005, 01023, 01013, 01007, 
-        02011, 04021, 01021, 04103, 04043, 04023, 04013, 04007, 
-        06403, 02401, 02201, 02101, 00043, 00023, 00201, 01011, 
-        02003, 02403, 00007, 01005, 02043, 02023, 02013, 02007, 
-        00000, 04006, 00006, 00102, 02102, 01042, 04000, 00022,
-        04022, 02022, 02042, 04012, 01102, 02000, 04102, 01400,
-        01000, 00400, 00200, 00100, 00040, 00020, 00010, 00004,
-        00002, 00001, 00202, 02012, 02042, 00012, 01012, 01006,
-        00042, 04400, 04200, 04100, 04040, 04020, 04010, 04004, 
-        04002, 04001, 02400, 02200, 02100, 02040, 02020, 02010, 
-        02004, 02002, 02001, 01200, 01100, 01040, 01020, 01010, 
-        01004, 01002, 01001, 04202, 01202, 02202, 02006, 01022,
-        00402, 05400, 05200, 05100, 05040, 05020, 05010, 05004, 
-        05002, 05001, 06400, 06200, 06100, 06040, 06020, 06010, 
-        06004, 06002, 06001, 03200, 03100, 03040, 03020, 03010, 
-        03004, 03002, 03001, 05000, 06000, 03000, 03400, 04005, 
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-      }
-    },
-    { NULL }
-};
 
 #define PC_COLOR_CREAM		(0 << 3)
 #define PC_COLOR_WHITE		(1 << 3)
@@ -504,7 +137,7 @@ static XFontStruct	*ifontinfo;
 static Atom		a_delete_me;
 static int		line_number = 100;
 static Pixmap		hole_pixmap;
-struct charset		*ccharset = NULL;
+charset_t		ccharset = NULL;
 struct card_type	*ccard_type = NULL;
 
 int			batchfd = -1;
@@ -669,6 +302,7 @@ static void batch_fsm(void);
 void
 usage(void)
 {
+	charset_t c = NULL;
 	int i;
 
 	fprintf(stderr, "Usage: %s [x026-options] [Xt-options]\n",
@@ -677,9 +311,10 @@ usage(void)
   -ifont <font>    Interpreter (card edge) font, defaults to 7x13\n\
   -nonumber        Do not automatically number cards in cols 73..80\n\
   -charset <name>  Keypunch character set:\n");
-	for (i = 0; charsets[i].name != NULL; i++)
+	for (c = next_charset(NULL); c != NULL; c = next_charset(c)) {
 		fprintf(stderr, "    %-9s %s\n",
-			charsets[i].name, charsets[i].description);
+			charset_name(c), charset_desc(c));
+	}
 	fprintf(stderr, "\
   -card <name>     Card image:\n");
 	for (i = 0; cards[i].name != NULL; i++)
@@ -744,45 +379,15 @@ main(int argc, char *argv[])
 		XtError("Can't load interpreter font");
 
 	/* Pick out the character set. */
-	for (i = 0; charsets[i].name; i++) {
-		if (!strcasecmp(appres.charset, charsets[i].name)) {
-			ccharset = &charsets[i];
-			break;
-		}
-	}
-	if (!charsets[i].name) {
+	ccharset = find_charset(appres.charset);
+	if (ccharset == NULL) {
+		ccharset = default_charset();
 		fprintf(stderr, "No such charset: '%s', "
 				"defaulting to '%s'\n"
 		                "Use '-help' to list the available "
 				"character sets\n",
-				appres.charset, charsets[0].name);
-		ccharset = &charsets[0];
+				appres.charset, charset_name(ccharset));
 	}
-
-#if defined(DUMP_TABLE) /*[*/
-	for (i = 0; i < 257; i++) {
-		if (i && !(i % 8)) {
-			int j;
-
-			printf(", /* ");
-			for (j = i - 8; j < i; j++) {
-				if ((j & 0x7f) > ' ' && j != 0x7f)
-					putchar(j);
-				else
-					putchar(' ');
-			}
-			printf(" */\n");
-		}
-		if (i == 257)
-			break;
-		if (i % 8)
-			printf(", ");
-		if (ccharset->charset[i] == NS)
-			printf("   NS");
-		else
-			printf("0%04o", ccharset->charset[i]);
-	}
-#endif /*]*/
 
 	/* Define the widgets. */
 	define_widgets();
@@ -1202,19 +807,19 @@ punch_char(int cn, unsigned char c)
 {
 	int j;
 
-	if (ccharset->charset[c] == NS) {
+	if (charset_xlate(ccharset, c) == NS) {
 		/* Map lowercase, to be polite. */
-		if (islower(c) && ccharset->charset[toupper(c)] != NS)
+		if (islower(c) && charset_xlate(ccharset, toupper(c)) != NS)
 			c = toupper(c);
 		else
 			return False;
 	}
 
 	/* Space?  Do nothing. */
-	if (!ccharset->charset[c])
+	if (!charset_xlate(ccharset, c))
 		return True;
 
-	ccard->holes[cn] |= ccharset->charset[c];
+	ccard->holes[cn] |= charset_xlate(ccharset, c);
 
 	/* Redundant? */
 	for (j = 0; j < ccard->n_ov[cn]; j++)
@@ -1944,8 +1549,8 @@ save_file_ascii(void)
 			for (h = 0; h < 256; h++) {
 				if (h == '\n' || h == '\b')
 					continue;
-				if (ccharset->charset[h] != NS &&
-				    ccharset->charset[h] == c->holes[i]) {
+				if (charset_xlate(ccharset, h) != NS &&
+				    charset_xlate(ccharset, h) == c->holes[i]) {
 					fputc(h, f);
 					break;
 				}
@@ -1998,7 +1603,8 @@ save_file_image(void)
 
 		fprintf(f, "%c%c%c",
 		    0x80 | ccard_type->card_type[0],
-		    0x80 | ccard_type->card_type[1] | ccharset->punch_type,
+		    0x80 | ccard_type->card_type[1] |
+			charset_punch_type(ccharset),
 		    0x80 | ccard_type->card_type[2]);
 		for (i = 0; i < N_COLS; i++) {
 			if (i % 2) {
