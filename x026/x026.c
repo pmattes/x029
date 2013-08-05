@@ -58,6 +58,17 @@ struct card_type {
 	{ NULL, NULL }
 };
 
+enum {
+    T_AUTO_SKIP_DUP,
+    T_UNUSED_1,
+    T_PROG_SEL,
+    T_AUTO_FEED,
+    T_PRINT,
+    T_LZ_PRINT,
+    T_UNUSED_2,
+    T_CLEAR
+} toggle_ix;
+
 char *top_label[] = { "ON", NULL, "ONE", "ON", "ON", "ON", NULL, "ON" };
 char *bottom_label1[] = { "AUTO", NULL, "TWO", "AUTO", "PRINT", "LZ", NULL, "CLEAR" };
 char *bottom_label2[] = { "SKIP", NULL, "PROG", "FEED", NULL, "PRINT", NULL, NULL };
@@ -242,6 +253,7 @@ static void confirm(Widget, XEvent *, String *, Cardinal *);
 
 /* Xt callbacks. */
 static void discard(Widget, XtPointer, XtPointer);
+static void feed(Widget, XtPointer, XtPointer);
 
 /* Actions. */
 XtActionsRec actions[] = {
@@ -462,8 +474,8 @@ struct toggle toggles[8];
 static void
 unclear_event(XtPointer data, XtIntervalId *id)
 {
-	toggles[7].on = 0;
-	XtVaSetValues(toggles[7].w, XtNbackgroundPixmap, off, NULL);
+	toggles[T_CLEAR].on = 0;
+	XtVaSetValues(toggles[T_CLEAR].w, XtNbackgroundPixmap, off, NULL);
 }
 
 /* Callback function for toggle switches. */
@@ -472,7 +484,7 @@ toggle_callback(Widget w, XtPointer client_data, XtPointer call_data)
 {
 	struct toggle *t = (struct toggle *)client_data;
 
-	if (t != &toggles[7]) {
+	if (t != &toggles[T_CLEAR]) {
 		t->on = !t->on;
 		XtVaSetValues(w, XtNbackgroundPixmap, t->on? on: off, NULL);
 		return;
@@ -484,6 +496,7 @@ toggle_callback(Widget w, XtPointer client_data, XtPointer call_data)
 	t->on = !t->on;
 	XtVaSetValues(w, XtNbackgroundPixmap, t->on? on: off, NULL);
 	(void) XtAppAddTimeOut(appcontext, SLOW * 6, unclear_event, NULL);
+	card_complete(FAST);
 }
 
 /* Card-image data structures. */
@@ -530,7 +543,6 @@ define_widgets(void)
 		<Key>Left:	Left()\n\
 		<Key>BackSpace:	Left()\n\
 		<Key>Right:	Right()\n\
-		<Key>space:	Right()\n\
 		<Key>Home:	Home()\n\
 		<Key>Return:	Next()\n\
 		<Key>KP_Enter:	Home()\n\
@@ -663,6 +675,20 @@ define_widgets(void)
 	    XtNsensitive, mode == M_INTERACTIVE,
 	    NULL);
 	XtAddCallback(ww, XtNcallback, discard, NULL);
+
+	/* Add the feed button. */
+	ww = XtVaCreateManagedWidget(
+	    "feed", commandWidgetClass, container,
+	    XtNlabel, "Feed",
+	    XtNwidth, BUTTON_WIDTH,
+	    XtNx, w - 3* (BUTTON_GAP + BUTTON_WIDTH + 2*BUTTON_BW),
+	    XtNy, card_height + 2*CARD_AIR + SWITCH_SKIP + BUTTON_GAP,
+	    XtNheight, BUTTON_HEIGHT,
+	    XtNborderWidth, BUTTON_BW,
+	    XtNborderColor, appres.background,
+	    XtNsensitive, mode == M_INTERACTIVE,
+	    NULL);
+	XtAddCallback(ww, XtNcallback, feed, NULL);
 
 	/* Add the switches. */
 	if (XpmCreatePixmapFromData(display, XtWindow(container), off60_xpm,
@@ -801,9 +827,11 @@ punch_char(int cn, unsigned char c)
 		if (ccard->coltxt[cn][j] == c)
 			return True;
 
-	if (ccard->n_ov[cn] < N_OV) {
-		ccard->coltxt[cn][ccard->n_ov[cn]] = c;
-		++ccard->n_ov[cn];
+	if (toggles[T_PRINT].on) {
+		if (ccard->n_ov[cn] < N_OV) {
+			ccard->coltxt[cn][ccard->n_ov[cn]] = c;
+			++ccard->n_ov[cn];
+		}
 	}
 
 	return True;
@@ -1013,6 +1041,12 @@ do_data(int c)
 		loud_click();
 #endif /*]*/
 		do_right(0);
+		if (mode == M_INTERACTIVE &&
+		    toggles[T_AUTO_FEED].on &&
+		    col == N_COLS) {
+			card_complete(FAST);
+			get_new_card();
+		}
 	}
 }
 
@@ -1319,7 +1353,8 @@ next(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 		ccard = ccard->next;
 		set_posw(0);
 	} else {
-		card_complete(FAST);
+		if (card_visible)
+			card_complete(FAST);
 		get_new_card();
 	}
 }
@@ -1360,6 +1395,15 @@ discard(Widget w, XtPointer client_data, XtPointer call_data)
 	for (i = 0; i <= N_ROWS; i++)
 		enq_event(PAN_UP, 0, False, SLOW);
 
+}
+
+/* Feed a new card. */
+static void
+feed(Widget w, XtPointer client_data, XtPointer call_data)
+{
+	if (card_visible)
+		card_complete(FAST);
+	get_new_card();
 }
 
 /* Scroll the current card off to the left. */
