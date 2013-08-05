@@ -26,6 +26,7 @@
 #include <X11/Xaw/Porthole.h>
 #include <X11/xpm.h>
 
+#include "jones.h"
 #include "charset.h"
 
 #include "collins.xpm"		/* card image */
@@ -38,32 +39,6 @@
 #include "on60.xpm"		/* switch, on */
 
 #include "x026.bm"		/* icon */
-
-/* Symbolic code for 'no such translation.' */
-#define NS	0xffffffffU
-
-#define PC_COLOR_CREAM		(0 << 3)
-#define PC_COLOR_WHITE		(1 << 3)
-#define PC_COLOR_YELLOW		(2 << 3)
-#define PC_COLOR_PINK		(3 << 3)
-#define PC_COLOR_BLUE		(4 << 3)
-#define PC_COLOR_GREEN		(5 << 3)
-#define PC_COLOR_ORANGE		(6 << 3)
-#define PC_COLOR_BROWN		(7 << 3)
-#define PC_COLOR_YELLOW_STRIPE	(10 << 3)
-#define PC_COLOR_PINK_STRIPE	(11 << 3)
-#define PC_COLOR_BLUE_STRIPE	(12 << 3)
-#define PC_COLOR_GREEN_STRIPE	(13 << 3)
-#define PC_COLOR_ORANGE_STRIPE	(14 << 3)
-#define PC_COLOR_BROWN_STRIPE	(15 << 3)
-
-#define PC_CORNER_ROUND		(0 << 2)
-#define PC_CORNER_SQUARE	(1 << 2)
-
-#define PC_CUT_NEITHER		0
-#define PC_CUT_RIGHT		1
-#define PC_CUT_LEFT		2
-#define PC_CUT_BOTH		3
 
 struct card_type {
 	char *name;

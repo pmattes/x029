@@ -31,20 +31,7 @@
  *   zone 10    01000
  *   zone 11    02000
  *   zone 12    04000
- *
- * Some definitions are incomplete, for characters which are not represented
- * in ISO 8859-1.  When this program has an interactive keyboard, these will
- * probably be added.
- *
- * There is also no attempt to map control codes between 8859-1 and punched
- * card code.
  */
-typedef enum {
-    PTYPE_NONPRINTING = 0,
-    PTYPE_026_COMMERCIAL = 0x08,
-    PTYPE_026_FORTRAN = 0x10,
-    PTYPE_029 = 0x20
-} punch_type_t;
 
 /* Opaque type. */
 typedef struct _fake_charset *charset_t;
