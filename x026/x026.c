@@ -89,8 +89,11 @@ char *bottom_label3[] = { "DUP", NULL, "SEL", NULL, NULL, NULL, NULL, NULL };
 
 #define	BUTTON_GAP	5
 #define BUTTON_BW	2
-#define BUTTON_WIDTH	50
+#define BUTTON_WIDTH	45
 #define	BUTTON_HEIGHT	20
+
+#define KEY_WIDTH	40
+#define KEY_HEIGHT	40
 
 static char		*programname;
 static Widget		toplevel;
@@ -211,6 +214,17 @@ static XtResource resources[] = {
 static String fallbacks[] = {
 	"*ifont:	7x13",
 	"*pos.font:	6x13bold",
+	"*Off.foreground: white",
+	"*Off.background: red3",
+	"*Off.borderColor: red4",
+	"*feed.font:	6x13",
+	"*feed.foreground: white",
+	"*feed.background: deepskyblue2",
+	"*feed.borderColor: deepskyblue3",
+	"*rel.font:	6x13",
+	"*rel.foreground: white",
+	"*rel.background: deepskyblue2",
+	"*rel.borderColor: deepskyblue3",
 	"*dialog*value*font: fixed",
 	"*switch.font:  6x10",
 	"*switch.background:  grey92",
@@ -234,8 +248,9 @@ static void insert_selection(Widget, XEvent *, String *, Cardinal *);
 static void confirm(Widget, XEvent *, String *, Cardinal *);
 
 /* Xt callbacks. */
-static void discard_button(Widget, XtPointer, XtPointer);
+static void discard_button(int ignored);
 static void feed_button(Widget, XtPointer, XtPointer);
+static void rel_button(Widget, XtPointer, XtPointer);
 
 /* Actions. */
 static XtActionsRec actions[] = {
@@ -433,6 +448,7 @@ struct button {
 } button[] = {
 	{ "Off", False, (void (*)())exit },
 	{ "Save", True, save },
+	{ "Drop", True, discard_button },
 	{ NULL, False, NULL },
 };
 
@@ -619,11 +635,13 @@ define_widgets(void)
 		    XtNx, BUTTON_GAP + i*(2*BUTTON_BW + BUTTON_WIDTH + BUTTON_GAP),
 		    XtNy, card_height + 2*CARD_AIR + SWITCH_SKIP + BUTTON_GAP,
 		    XtNborderWidth, BUTTON_BW,
-		    XtNborderColor, appres.background,
 		    XtNsensitive, !(button[i].batch_disable &&
 				    mode != M_INTERACTIVE),
 		    NULL
 		);
+		if (i != 0)
+			XtVaSetValues(ww, XtNborderColor, appres.background,
+				NULL);
 		XtAddCallback(ww, XtNcallback, button_callback,
 		    (XtPointer)&button[i]);
 	}
@@ -632,42 +650,45 @@ define_widgets(void)
 	posw = XtVaCreateManagedWidget(
 	    "pos", labelWidgetClass, container,
 	    XtNlabel, "0",
-	    XtNwidth, BUTTON_WIDTH,
-	    XtNx, w - BUTTON_GAP - BUTTON_WIDTH - 2*BUTTON_BW,
-	    XtNy, card_height + 2*CARD_AIR + SWITCH_SKIP + BUTTON_GAP,
-	    XtNheight, BUTTON_HEIGHT,
+	    XtNwidth, KEY_WIDTH,
+	    XtNx, w - BUTTON_GAP - KEY_WIDTH - 2*BUTTON_BW,
+	    XtNy, card_height + 2*CARD_AIR + SWITCH_SKIP + BUTTON_GAP
+		    - (KEY_HEIGHT - BUTTON_HEIGHT),
+	    XtNheight, KEY_HEIGHT,
 	    XtNborderWidth, BUTTON_BW,
 	    XtNborderColor, appres.background,
 	    XtNresize, False,
 	    NULL);
 
-	/* Add the discard button. */
-	ww = XtVaCreateManagedWidget(
-	    "discard", commandWidgetClass, container,
-	    XtNlabel, "Discard",
-	    XtNwidth, BUTTON_WIDTH,
-	    XtNx, w - 2* (BUTTON_GAP + BUTTON_WIDTH + 2*BUTTON_BW),
-	    XtNy, card_height + 2*CARD_AIR + SWITCH_SKIP + BUTTON_GAP,
-	    XtNheight, BUTTON_HEIGHT,
-	    XtNborderWidth, BUTTON_BW,
-	    XtNborderColor, appres.background,
-	    XtNsensitive, mode == M_INTERACTIVE,
-	    NULL);
-	XtAddCallback(ww, XtNcallback, discard_button, NULL);
-
-	/* Add the feed button. */
+	/* Add the FEED button. */
 	ww = XtVaCreateManagedWidget(
 	    "feed", commandWidgetClass, container,
-	    XtNlabel, "Feed",
-	    XtNwidth, BUTTON_WIDTH,
-	    XtNx, w - 3* (BUTTON_GAP + BUTTON_WIDTH + 2*BUTTON_BW),
-	    XtNy, card_height + 2*CARD_AIR + SWITCH_SKIP + BUTTON_GAP,
-	    XtNheight, BUTTON_HEIGHT,
+	    XtNlabel, "FEED",
+	    XtNwidth, KEY_WIDTH,
+	    XtNx, w - 2* (BUTTON_GAP + KEY_WIDTH + 2*BUTTON_BW),
+	    XtNy, card_height + 2*CARD_AIR + SWITCH_SKIP + BUTTON_GAP
+		    - (KEY_HEIGHT - BUTTON_HEIGHT),
+	    XtNheight, KEY_HEIGHT,
 	    XtNborderWidth, BUTTON_BW,
-	    XtNborderColor, appres.background,
+	    XtNhighlightThickness, 0,
 	    XtNsensitive, mode == M_INTERACTIVE,
 	    NULL);
 	XtAddCallback(ww, XtNcallback, feed_button, NULL);
+
+	/* Add the REL button. */
+	ww = XtVaCreateManagedWidget(
+	    "rel", commandWidgetClass, container,
+	    XtNlabel, "REL",
+	    XtNwidth, KEY_WIDTH,
+	    XtNx, w - 3* (BUTTON_GAP + KEY_WIDTH + 2*BUTTON_BW),
+	    XtNy, card_height + 2*CARD_AIR + SWITCH_SKIP + BUTTON_GAP
+		    - (KEY_HEIGHT - BUTTON_HEIGHT),
+	    XtNheight, KEY_HEIGHT,
+	    XtNborderWidth, BUTTON_BW,
+	    XtNhighlightThickness, 0,
+	    XtNsensitive, mode == M_INTERACTIVE,
+	    NULL);
+	XtAddCallback(ww, XtNcallback, rel_button, NULL);
 
 	/* Add the switches. */
 	if (XpmCreatePixmapFromData(display, XtWindow(container), off60_xpm,
@@ -1390,7 +1411,7 @@ tab(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 
 /* Throw away this card. */
 static void
-discard_button(Widget w, XtPointer client_data, XtPointer call_data)
+discard_button(int ignored)
 {
 	int i;
 
@@ -1429,6 +1450,13 @@ feed_button(Widget w, XtPointer client_data, XtPointer call_data)
 {
 	if (!eq_count && !card_in_punch_station)
 		do_feed();
+}
+
+/* Release the card in the punch station. */
+static void
+rel_button(Widget w, XtPointer client_data, XtPointer call_data)
+{
+	rel(NULL, NULL, NULL, NULL);
 }
 
 /*
