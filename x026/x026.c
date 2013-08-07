@@ -54,7 +54,10 @@ char *bottom_label3[] = { "DUP", NULL, "SEL", NULL, NULL, NULL, NULL, NULL };
 #define VERY_SLOW 500
 #define SLOW	75
 #define FAST	25
-#define VERY_FAST 10
+#define VERY_FAST 15
+
+#define SLAM_COL	15
+#define SLAM_TARGET_COL	40
 
 #define CELL_X_NUM	693
 #define CELL_X_DENOM	80
@@ -479,7 +482,7 @@ toggle_callback(Widget w, XtPointer client_data, XtPointer call_data)
 	XtVaSetValues(w, XtNbackgroundPixmap, t->on? on: off, NULL);
 	(void) XtAppAddTimeOut(appcontext, SLOW * 6, unclear_event, NULL);
 	if (card_in_punch_station)
-		    do_release(FAST);
+		    do_release(VERY_FAST);
 }
 
 /* Card-image data structures. */
@@ -584,7 +587,7 @@ define_widgets(void)
 	    NULL);
 
 	/* Create scrollable region within the porthole. */
-	scrollw_column = 40;
+	scrollw_column = SLAM_COL;
 	scrollw = XtVaCreateManagedWidget(
 	    "scroll", compositeWidgetClass, porth,
 	    XtNwidth, card_width * 3,
@@ -1051,7 +1054,7 @@ do_kybd_right(int do_click)
 		if (mode == M_INTERACTIVE &&
 		    toggles[T_AUTO_FEED].on &&
 		    col == N_COLS) {
-			do_release(FAST);
+			do_release(VERY_FAST);
 			do_feed();
 		}
 	}
@@ -1107,7 +1110,7 @@ do_home(int ignored)
 static void
 do_slam(int ignored)
 {
-	scrollw_column = 40;
+	scrollw_column = SLAM_COL;
 	XtVaSetValues(scrollw,
 	    XtNx, SCROLLW_X(),
 	    XtNy, -(2*card_height) + TOP_PAD,
@@ -1365,7 +1368,7 @@ rel(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 	}
 
 	if (card_in_punch_station) {
-		do_release(FAST);
+		do_release(VERY_FAST);
 		if (toggles[T_AUTO_FEED].on)
 			do_feed();
 	}
@@ -1405,13 +1408,19 @@ discard_button(Widget w, XtPointer client_data, XtPointer call_data)
 			enq_event(PAN_LEFT, 0, False, FAST);
 	}
 
+	card_in_punch_station = False;
+
 	enq_event(NEWCARD, True, False, FAST);
 
 	/* Scroll the new card down. */
 	enq_event(SLAM, 0, False, SLOW);
-	for (i = 0; i <= N_ROWS; i++)
+	for (i = 0; i <= N_ROWS; i++) {
 		enq_event(PAN_UP, 0, False, FAST);
-
+	}
+	for (i = SLAM_COL; i < SLAM_TARGET_COL; i++) {
+		enq_event(PAN_RIGHT, 0, False, VERY_FAST);
+	}
+	enq_event(VISIBLE, 0, False, 0);
 }
 
 /* Feed a new card. */
@@ -1456,8 +1465,12 @@ do_feed(void)
 
 	/* Scroll the new card down. */
 	enq_event(SLAM, 0, False, SLOW);
-	for (i = 0; i <= N_ROWS; i++)
+	for (i = 0; i <= N_ROWS; i++) {
 		enq_event(PAN_UP, 0, False, FAST);
+	}
+	for (i = SLAM_COL; i < SLAM_TARGET_COL; i++) {
+		enq_event(PAN_RIGHT, 0, False, VERY_FAST);
+	}
 	enq_event(VISIBLE, 0, False, 0);
 }
 
@@ -1914,7 +1927,7 @@ batch_fsm(void)
 
 			if (col >= N_COLS - 1) {
 				/* End of card.  Release it. */
-				do_release(SLOW);
+				do_release(FAST);
 
 				/*
 				 * In remote control mode, create a new card.
