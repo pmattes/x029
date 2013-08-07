@@ -54,6 +54,7 @@ char *bottom_label3[] = { "DUP", NULL, "SEL", NULL, NULL, NULL, NULL, NULL };
 #define VERY_SLOW 500
 #define SLOW	75
 #define FAST	25
+#define VERY_FAST 10
 
 #define CELL_X_NUM	693
 #define CELL_X_DENOM	80
@@ -1365,7 +1366,7 @@ discard(Widget w, XtPointer client_data, XtPointer call_data)
 	/* Scroll the new card down. */
 	enq_event(SLAM, 0, False, SLOW);
 	for (i = 0; i <= N_ROWS; i++)
-		enq_event(PAN_UP, 0, False, SLOW);
+		enq_event(PAN_UP, 0, False, FAST);
 
 }
 
@@ -1402,7 +1403,7 @@ get_new_card(void)
 	/* Scroll the new card down. */
 	enq_event(SLAM, 0, False, SLOW);
 	for (i = 0; i <= N_ROWS; i++)
-		enq_event(PAN_UP, 0, False, SLOW);
+		enq_event(PAN_UP, 0, False, FAST);
 	enq_event(VISIBLE, 0, False, 0);
 }
 
