@@ -27,36 +27,13 @@
 #include <X11/xpm.h>
 
 #include "jones.h"
+#include "cardimg.h"
 #include "charset.h"
 
-#include "collins.xpm"		/* card image */
-#include "carnegie2.xpm"	/* card image */
-#include "ibm.xpm"		/* card image */
-
 #include "hole.xpm"		/* hole image */
-
 #include "off60.xpm"		/* switch, off */
 #include "on60.xpm"		/* switch, on */
-
 #include "x026.bm"		/* icon */
-
-struct card_type {
-	char *name;
-	char *description;
-	char **pixmap_source;
-	unsigned char card_type[3];
-} cards[] = {
-	{ "collins", "Collins Radio Corporation", collins,
-		{ PC_COLOR_CREAM | PC_CORNER_ROUND | PC_CUT_LEFT,
-		  0, 0 } },
-	{ "cmu", "Carnegie Mellon University", carnegie2,
-		{ PC_COLOR_YELLOW_STRIPE | PC_CORNER_ROUND | PC_CUT_RIGHT,
-		  0, 0 } },
-	{ "ibm", "IBM", ibm,
-		{ PC_COLOR_CREAM | PC_CORNER_ROUND | PC_CUT_LEFT,
-		  0, 0 } },
-	{ NULL, NULL }
-};
 
 enum {
     T_AUTO_SKIP_DUP,
@@ -124,7 +101,7 @@ static Atom		a_delete_me;
 static int		line_number = 100;
 static Pixmap		hole_pixmap;
 charset_t		ccharset = NULL;
-struct card_type	*ccard_type = NULL;
+cardimg_t		ccardimg = NULL;
 
 int			batchfd = -1;
 
@@ -289,8 +266,8 @@ static void batch_fsm(void);
 void
 usage(void)
 {
-	charset_t c = NULL;
-	int i;
+	charset_t cs = NULL;
+	cardimg_t ci = NULL;
 
 	fprintf(stderr, "Usage: %s [x026-options] [Xt-options]\n",
 			programname);
@@ -298,15 +275,16 @@ usage(void)
   -ifont <font>    Interpreter (card edge) font, defaults to 7x13\n\
   -nonumber        Do not automatically number cards in cols 73..80\n\
   -charset <name>  Keypunch character set:\n");
-	for (c = next_charset(NULL); c != NULL; c = next_charset(c)) {
+	for (cs = next_charset(NULL); cs != NULL; cs = next_charset(cs)) {
 		fprintf(stderr, "    %-9s %s\n",
-			charset_name(c), charset_desc(c));
+			charset_name(cs), charset_desc(cs));
 	}
 	fprintf(stderr, "\
   -card <name>     Card image:\n");
-	for (i = 0; cards[i].name != NULL; i++)
+	for (ci = next_cardimg(NULL); ci != NULL; ci = next_cardimg(ci)) {
 		fprintf(stderr, "    %-9s %s\n",
-			cards[i].name, cards[i].description);
+			cardimg_name(ci), cardimg_desc(ci));
+	}
 	fprintf(stderr, "\
   -026ftn          Alias for '-charset bcd-h'\n\
   -026comm         Alias for '-charset bcd-a'\n\
@@ -562,22 +540,16 @@ define_widgets(void)
 	    NULL);
 	XtRealizeWidget(toplevel);
 
-	/* Figure out the pixmap. */
-	for (i = 0; cards[i].name != NULL; i++) {
-		if (!strcmp(appres.card, cards[i].name)) {
-			ccard_type = &cards[i];
-			break;
-		}
-	}
-	if (cards[i].name == NULL) {
+	/* Figure out the card image. */
+	if ((ccardimg = find_cardimg(appres.card)) == NULL) {
+		ccardimg = default_cardimg();
 		fprintf(stderr, "No such card '%s', defaulting to '%s'\n"
 				"Use '-help' to list the types\n",
-				appres.card, cards[0].name);
-		ccard_type = &cards[0];
+				appres.card, cardimg_name(ccardimg));
 	}
 	attributes.valuemask = XpmSize;
 	if (XpmCreatePixmapFromData(display, XtWindow(container),
-			ccard_type->pixmap_source, &pixmap, &shapemask,
+			cardimg_pixmap_source(ccardimg), &pixmap, &shapemask,
 			&attributes) != XpmSuccess) {
 		XtError("XpmCreatePixmapFromData failed");
 	}
@@ -1621,10 +1593,10 @@ save_file_image(void)
 			continue;
 
 		fprintf(f, "%c%c%c",
-		    0x80 | ccard_type->card_type[0],
-		    0x80 | ccard_type->card_type[1] |
+		    0x80 | cardimg_type(ccardimg)[0],
+		    0x80 | cardimg_type(ccardimg)[1] |
 			charset_punch_type(ccharset),
-		    0x80 | ccard_type->card_type[2]);
+		    0x80 | cardimg_type(ccardimg)[2]);
 		for (i = 0; i < N_COLS; i++) {
 			if (i % 2) {
 				b3[1] |= (c->holes[i] >> 8) & 0xf;

@@ -1,7 +1,7 @@
 /* Imakefile for x026 */
 
 LOCAL_LIBRARIES = $(XAWLIB) $(XMULIB) $(XPMLIB) $(XTOOLLIB) $(XLIB)
-SRCS = x026.c charset.c
-OBJS = x026.o charset.o
+SRCS = x026.c charset.c cardimg.c
+OBJS = x026.o charset.o cardimg.o
 
 ComplexProgramTarget(x026)
