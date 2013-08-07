@@ -118,7 +118,8 @@ static void do_nothing(int);
 static void do_data(int);
 static void do_multipunch(int);
 static void do_left(int);
-static void do_right(int);
+static void do_kybd_right(int);
+static void do_rel_right(int);
 static void do_home(int);
 static void do_pan_right(int);
 static void do_pan_left(int);
@@ -222,7 +223,7 @@ static void multi_punch_data(Widget, XEvent *, String *, Cardinal *);
 static void delete_window(Widget, XEvent *, String *, Cardinal *);
 static void home(Widget, XEvent *, String *, Cardinal *);
 static void left(Widget, XEvent *, String *, Cardinal *);
-static void next(Widget, XEvent *, String *, Cardinal *);
+static void rel(Widget, XEvent *, String *, Cardinal *);
 static void redraw(Widget, XEvent *, String *, Cardinal *);
 static void right(Widget, XEvent *, String *, Cardinal *);
 static void tab(Widget, XEvent *, String *, Cardinal *);
@@ -230,24 +231,26 @@ static void insert_selection(Widget, XEvent *, String *, Cardinal *);
 static void confirm(Widget, XEvent *, String *, Cardinal *);
 
 /* Xt callbacks. */
-static void discard(Widget, XtPointer, XtPointer);
-static void feed(Widget, XtPointer, XtPointer);
+static void discard_button(Widget, XtPointer, XtPointer);
+static void feed_button(Widget, XtPointer, XtPointer);
 
 /* Actions. */
-XtActionsRec actions[] = {
+static XtActionsRec actions[] = {
 	{ "Data",	data },
 	{ "MultiPunchData", multi_punch_data },
 	{ "DeleteWindow", delete_window },
 	{ "Home",	home },
 	{ "Left",	left },
-	{ "Next",	next },
+	{ "Rel",	rel },
 	{ "Redraw",	redraw },
 	{ "Right",	right },
 	{ "Tab",	tab },
 	{ "insert-selection", insert_selection },
 	{ "confirm",	confirm }
 };
-int actioncount = XtNumber(actions);
+static int actioncount = XtNumber(actions);
+
+static Boolean card_in_punch_station = False;
 
 /* Forward references. */
 static void define_widgets(void);
@@ -255,12 +258,12 @@ static void define_widgets(void);
 #define NC_SCROLL_IF_CARD	False
 #define NC_INTERACTIVE		True
 #define NC_BATCH		False
-static void get_new_card(void);
+static void do_feed(void);
 static void save_popup(void);
 static Boolean add_char(char c);
 static void enq_quit(void);
 static void enq_delay(void);
-static void card_complete(int delay);
+static void do_release(int delay);
 static void batch_fsm(void);
 
 /* Syntax. */
@@ -405,7 +408,7 @@ main(int argc, char *argv[])
 	}
 
 	if (mode == M_INTERACTIVE || mode == M_REMOTECTL) {
-		get_new_card();
+		do_feed();
 	}
 	if (mode != M_INTERACTIVE) {
 		batch_fsm();
@@ -475,7 +478,8 @@ toggle_callback(Widget w, XtPointer client_data, XtPointer call_data)
 	t->on = !t->on;
 	XtVaSetValues(w, XtNbackgroundPixmap, t->on? on: off, NULL);
 	(void) XtAppAddTimeOut(appcontext, SLOW * 6, unclear_event, NULL);
-	card_complete(FAST);
+	if (card_in_punch_station)
+		    do_release(FAST);
 }
 
 /* Card-image data structures. */
@@ -495,7 +499,6 @@ typedef struct card {
 static card *ccard;
 
 static int col = 0;
-static Boolean card_visible = False;
 static GC gc, invgc, holegc, corner_gc;
 
 static Widget container, porth, scrollw, cardw, posw;
@@ -523,9 +526,9 @@ define_widgets(void)
 		<Key>BackSpace:	Left()\n\
 		<Key>Right:	Right()\n\
 		<Key>Home:	Home()\n\
-		<Key>Return:	Next()\n\
+		<Key>Return:	Rel()\n\
 		<Key>KP_Enter:	Home()\n\
-		<Key>Down:	Next()\n\
+		<Key>Down:	Rel()\n\
 		<Key>Tab:	Tab()\n\
 		<Btn2Down>:	insert-selection(PRIMARY)\n\
 		Alt<Key>:	MultiPunchData()\n\
@@ -647,7 +650,7 @@ define_widgets(void)
 	    XtNborderColor, appres.background,
 	    XtNsensitive, mode == M_INTERACTIVE,
 	    NULL);
-	XtAddCallback(ww, XtNcallback, discard, NULL);
+	XtAddCallback(ww, XtNcallback, discard_button, NULL);
 
 	/* Add the feed button. */
 	ww = XtVaCreateManagedWidget(
@@ -661,7 +664,7 @@ define_widgets(void)
 	    XtNborderColor, appres.background,
 	    XtNsensitive, mode == M_INTERACTIVE,
 	    NULL);
-	XtAddCallback(ww, XtNcallback, feed, NULL);
+	XtAddCallback(ww, XtNcallback, feed_button, NULL);
 
 	/* Add the switches. */
 	if (XpmCreatePixmapFromData(display, XtWindow(container), off60_xpm,
@@ -1008,18 +1011,12 @@ do_nothing(int ignored)
 static void
 do_data(int c)
 {
-	if (col < N_COLS && punch_char(col, c)) {
+	if (card_in_punch_station && col < N_COLS && punch_char(col, c)) {
 		draw_col(col);
 #if defined(SOUND) /*[*/
 		loud_click();
 #endif /*]*/
-		do_right(0);
-		if (mode == M_INTERACTIVE &&
-		    toggles[T_AUTO_FEED].on &&
-		    col == N_COLS) {
-			card_complete(FAST);
-			get_new_card();
-		}
+		do_kybd_right(0);
 	}
 }
 
@@ -1044,7 +1041,24 @@ do_left(int c)
 }
 
 static void
-do_right(int do_click)
+do_kybd_right(int do_click)
+{
+	if (col < N_COLS) {
+		do_pan_right(do_click);
+		set_posw(col + 1);
+
+		/* Do auto-feed. */
+		if (mode == M_INTERACTIVE &&
+		    toggles[T_AUTO_FEED].on &&
+		    col == N_COLS) {
+			do_release(FAST);
+			do_feed();
+		}
+	}
+}
+
+static void
+do_rel_right(int do_click)
 {
 	if (col < N_COLS) {
 		do_pan_right(do_click);
@@ -1109,27 +1123,27 @@ do_quit(int ignored)
 static void
 do_invisible(int ignored)
 {
-	card_visible = False;
+	card_in_punch_station = False;
 }
 
 static void
 do_visible(int ignored)
 {
-	card_visible = True;
+	card_in_punch_station = True;
 }
 
 /*
  * Event queueing: Inserting artificial delays in processing certain events.
  */
-enum evtype { DUMMY, DATA, MULTI, LEFT, RIGHT, HOME,
+enum evtype { DUMMY, DATA, MULTI, LEFT, KYBD_RIGHT, HOME,
 	      PAN_RIGHT, PAN_LEFT, PAN_UP, SLAM, NEWCARD, QUIT,
-	      INVISIBLE, VISIBLE };
+	      INVISIBLE, VISIBLE, REL_RIGHT };
 void (*eq_fn[])(int) = {
 	do_nothing,
 	do_data,
 	do_multipunch,
 	do_left,
-	do_right,
+	do_kybd_right,
 	do_home,
 	do_pan_right,
 	do_pan_left,
@@ -1138,12 +1152,13 @@ void (*eq_fn[])(int) = {
 	do_newcard,
 	do_quit,
 	do_invisible,
-	do_visible
+	do_visible,
+	do_rel_right,
 };
 char *eq_name[] = {
-	"DUMMY", "DATA", "MULTI", "LEFT", "RIGHT", "HOME",
+	"DUMMY", "DATA", "MULTI", "LEFT", "KYBD_RIGHT", "HOME",
 	"PAN_RIGHT", "PAN_LEFT", "PAN_UP", "SLAM", "NEWCARD", "QUIT",
-	"INVISIBLE", "VISIBLE"
+	"INVISIBLE", "VISIBLE", "REL_RIGHT"
 };
 typedef struct event {
 	struct event *next;
@@ -1157,7 +1172,9 @@ int eq_count;
 static void
 dump_queue(const char *when)
 {
-	event_t *e;
+	event_t *e = NULL;
+	event_t *prev = NULL;
+	int cnt = 0;
 
 	if (!appres.debug)
 		return;
@@ -1165,8 +1182,25 @@ dump_queue(const char *when)
 	printf("queue(%s):", when);
 
 	for (e = eq_first; e != NULL; e = e->next) {
-		printf(" %s(%d)%s",  eq_name[e->evtype], e->delay,
-			e == eq_last? "*": "");
+		if (prev == NULL) {
+			prev = e;
+			cnt = 1;
+			continue;
+		}
+		if (prev->evtype == e->evtype && prev->delay == e->delay) {
+			cnt++;
+			continue;
+		}
+		printf(" %s(%d)", eq_name[prev->evtype], prev->delay);
+		if (cnt > 1)
+			printf("x%d", cnt);
+		prev = e;
+		cnt = 1;
+	}
+	if (cnt) {
+		printf(" %s(%d)", eq_name[prev->evtype], prev->delay);
+		if (cnt > 1)
+			printf("x%d", cnt);
 	}
 	printf("\n");
 }
@@ -1180,12 +1214,13 @@ deq_event(XtPointer data, XtIntervalId *id)
 	if (!eq_count)
 		return;
 
+	dump_queue("before deq");
+
 	/* Dequeue it. */
 	e = eq_first;
 	eq_first = e->next;
 	if (eq_first == NULL)
 		eq_last = NULL;
-	dump_queue("deq");
 
 	/* Run it. */
 	if (appres.debug)
@@ -1201,8 +1236,6 @@ deq_event(XtPointer data, XtIntervalId *id)
 	 * Otherwise, see if the batch FSM needs cranking.
 	 */
 	if (--eq_count) {
-		if (appres.debug)
-			printf("TimeOut(%d)\n", eq_first->delay);
 		(void) XtAppAddTimeOut(appcontext, eq_first->delay, deq_event,
 			NULL);
 	} else if (mode != M_INTERACTIVE)
@@ -1232,11 +1265,9 @@ enq_event(enum evtype evtype, unsigned char param, Boolean restricted, int delay
 	if (eq_last != NULL)
 		eq_last->next = e;
 	eq_last = e;
-	dump_queue("enq");
+	dump_queue("after enq");
 
 	if (!eq_count++) {
-		if (appres.debug)
-			printf("TimeOut(%d)\n", delay);
 		(void) XtAppAddTimeOut(appcontext, delay, deq_event, NULL);
 	}
 	return True;
@@ -1274,7 +1305,8 @@ data(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 
 	ll = XLookupString(kevent, buf, 10, &ks, (XComposeStatus *)NULL);
 	if (ll == 1) {
-		enq_event(DATA, buf[0] & 0xff, !appres.typeahead, SLOW);
+		if (card_in_punch_station)
+			enq_event(DATA, buf[0] & 0xff, !appres.typeahead, SLOW);
 	}
 }
 
@@ -1288,20 +1320,23 @@ multi_punch_data(Widget wid, XEvent *event, String *params, Cardinal *num_params
 
 	ll = XLookupString(kevent, buf, 10, &ks, (XComposeStatus *)NULL);
 	if (ll == 1) {
-		enq_event(MULTI, buf[0], !appres.typeahead, SLOW);
+		if (card_in_punch_station)
+			enq_event(MULTI, buf[0], !appres.typeahead, SLOW);
 	}
 }
 
 static void
 left(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
-	enq_event(LEFT, 0, !appres.typeahead, SLOW);
+	if (card_in_punch_station)
+		enq_event(LEFT, 0, !appres.typeahead, SLOW);
 }
 
 static void
 right(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
-	enq_event(RIGHT, 1, !appres.typeahead, SLOW);
+	if (card_in_punch_station)
+		enq_event(KYBD_RIGHT, 1, !appres.typeahead, SLOW);
 }
 
 static void
@@ -1309,26 +1344,30 @@ home(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
 	int i;
 
-	if (!enq_event(DUMMY, 0, True, SLOW))
-		return;
+	if (card_in_punch_station) {
+		if (!enq_event(DUMMY, 0, True, SLOW))
+			return;
 
-	for (i = 0; i < col; i++)
-		enq_event(HOME, 0, False, FAST);
+		for (i = 0; i < col; i++)
+			enq_event(HOME, 0, False, FAST);
+	}
 }
 
 /*
  * Scroll the current card away, and get a new one.
+ * This is mapped to the Enter (X11 'Return') key, which is the 029 REL key.
  */
 static void
-next(Widget wid, XEvent *event, String *params, Cardinal *num_params)
+rel(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
-	if (ccard->next) {
-		ccard = ccard->next;
-		set_posw(0);
-	} else {
-		if (card_visible)
-			card_complete(FAST);
-		get_new_card();
+	if (appres.debug) {
+		printf("rel(%s)\n", card_in_punch_station? "card": "no card");
+	}
+
+	if (card_in_punch_station) {
+		do_release(FAST);
+		if (toggles[T_AUTO_FEED].on)
+			do_feed();
 	}
 }
 
@@ -1337,18 +1376,23 @@ tab(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
 	int i;
 
-	if (!enq_event(DUMMY, 0, True, SLOW))
-		return;
+	if (card_in_punch_station) {
+		if (!enq_event(DUMMY, 0, True, SLOW))
+			return;
 
-	for (i = col; i < 6; i++)
-		enq_event(RIGHT, 1, False, SLOW);
+		for (i = col; i < 6; i++)
+			enq_event(KYBD_RIGHT, 1, False, SLOW);
+	}
 }
 
 /* Throw away this card. */
 static void
-discard(Widget w, XtPointer client_data, XtPointer call_data)
+discard_button(Widget w, XtPointer client_data, XtPointer call_data)
 {
 	int i;
+
+	if (!card_in_punch_station)
+		return;
 
 	if (!enq_event(DUMMY, 0, True, SLOW))
 		return;
@@ -1372,29 +1416,39 @@ discard(Widget w, XtPointer client_data, XtPointer call_data)
 
 /* Feed a new card. */
 static void
-feed(Widget w, XtPointer client_data, XtPointer call_data)
+feed_button(Widget w, XtPointer client_data, XtPointer call_data)
 {
-	if (card_visible)
-		card_complete(FAST);
-	get_new_card();
+	if (!eq_count && !card_in_punch_station)
+		do_feed();
 }
 
-/* Scroll the current card off to the left. */
+/*
+ * Release the card in the punch station, i.e., scroll it off to the left.
+ * This is just the release operation. Auto-feed needs to be implemented by the
+ * caller.
+ */
 static void
-card_complete(int delay)
+do_release(int delay)
 {
 	int i;
 
-	for (i = col; i < N_COLS; i++)
-		enq_event(RIGHT, 0, False, delay);
-	for (i = 0; i < N_COLS/2 + 10; i++)
+	/* The card is now officially invisible. */
+	card_in_punch_station = FALSE;
+
+	/* Space over the remainder of the card. */
+	for (i = col; i < N_COLS; i++) {
+		enq_event(REL_RIGHT, 0, False, delay);
+	}
+
+	/* Scroll the card out of the punch station. */
+	for (i = 0; i < N_COLS/2 + 10; i++) {
 		enq_event(PAN_RIGHT, 0, False, delay);
-	enq_event(INVISIBLE, 0, False, 0);
+	}
 }
 
-/* Generate a fresh card. */
+/* Pull a card from the (infinite) hopper into the punch station. */
 static void
-get_new_card(void)
+do_feed(void)
 {
 	int i;
 
@@ -1810,8 +1864,8 @@ batch_fsm(void)
 			break;
 
 		case BS_CHAR:
-			if (!card_visible) {
-				get_new_card();
+			if (!card_in_punch_station) {
+				do_feed();
 				if (mode == M_BATCH) {
 					enq_delay();
 				}
@@ -1859,8 +1913,8 @@ batch_fsm(void)
 				printf(" col = %d\n", col);
 
 			if (col >= N_COLS - 1) {
-				/* End of card.  Scroll it away. */
-				card_complete(SLOW);
+				/* End of card.  Release it. */
+				do_release(SLOW);
 
 				/*
 				 * In remote control mode, create a new card.
@@ -1868,7 +1922,7 @@ batch_fsm(void)
 				 * doing it.
 				 */
 				if (mode == M_REMOTECTL) {
-					get_new_card();
+					do_feed();
 				}
 
 				bs = BS_READ;
