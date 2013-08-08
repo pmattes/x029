@@ -22,8 +22,44 @@ struct charset {
 };
 
 static struct charset charsets[] = {
-    /* 026 keypunch FORTRAN, the default. */
-    { "bcd-h", "026 FORTRAN (default)", PTYPE_026_FORTRAN,
+    /* 029 keypunch. */
+    { "029", "029 standard", PTYPE_029,
+      {    NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+        00000, 03002, 00006, 00102, 02102, 01042, 04000, 00022, /*  !"#$%&' */
+        04022, 02022, 02042, 04012, 01102, 02000, 04102, 01400, /* ()*+,-./ */
+        01000, 00400, 00200, 00100, 00040, 00020, 00010, 00004, /* 01234567 */
+        00002, 00001, 00202, 02012, 04042, 00012, 01012, 01006, /* 89:;<=>? */
+        00042, 04400, 04200, 04100, 04040, 04020, 04010, 04004, /* @ABCDEFG */
+        04002, 04001, 02400, 02200, 02100, 02040, 02020, 02010, /* HIJKLMNO */
+        02004, 02002, 02001, 01200, 01100, 01040, 01020, 01010, /* PQRSTUVW */
+        01004, 01002, 01001,    NS,    NS,    NS,    NS, 01022, /* XYZ[\]^_ */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* `abcdefg */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* hijklmno */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* pqrstuvw */
+           NS,    NS,    NS,    NS, 04006,    NS,    NS,    NS, /* xyz{|}~  */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
+           NS,    NS, 05000,    NS,    NS,    NS,    NS,    NS, /*  ¡¢£¤¥¦§ */
+           NS,    NS,    NS,    NS, 02006,    NS,    NS,    NS, /* ¨©ª«¬­®¯ */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* °±²³´µ¶· */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ¸¹º»¼½¾¿ */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ÀÁÂÃÄÅÆÇ */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ÈÉÊËÌÍÎÏ */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ÐÑÒÓÔÕÖ× */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ØÙÚÛÜÝÞß */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* àáâãäåæç */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* èéêëìíîï */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ðñòóôõö÷ */
+           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS  /* øùúûüýþÿ */
+      }
+    },
+    /* 026 keypunch FORTRAN. */
+    { "bcd-h", "026 FORTRAN", PTYPE_026_FORTRAN,
       {    NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
@@ -164,42 +200,6 @@ static struct charset charsets[] = {
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* èéêëìíîï */
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ðñòóôõö÷ */
            NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* øùúûüýþÿ */
-      }
-    },
-    /* 029 keypunch. */
-    { "029", "029 standard", PTYPE_029,
-      {    NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-        00000, 03002, 00006, 00102, 02102, 01042, 04000, 00022, /*  !"#$%&' */
-        04022, 02022, 02042, 04012, 01102, 02000, 04102, 01400, /* ()*+,-./ */
-        01000, 00400, 00200, 00100, 00040, 00020, 00010, 00004, /* 01234567 */
-        00002, 00001, 00202, 02012, 04042, 00012, 01012, 01006, /* 89:;<=>? */
-        00042, 04400, 04200, 04100, 04040, 04020, 04010, 04004, /* @ABCDEFG */
-        04002, 04001, 02400, 02200, 02100, 02040, 02020, 02010, /* HIJKLMNO */
-        02004, 02002, 02001, 01200, 01100, 01040, 01020, 01010, /* PQRSTUVW */
-        01004, 01002, 01001,    NS,    NS,    NS,    NS, 01022, /* XYZ[\]^_ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* `abcdefg */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* hijklmno */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* pqrstuvw */
-           NS,    NS,    NS,    NS, 04006,    NS,    NS,    NS, /* xyz{|}~  */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /*          */
-           NS,    NS, 05000,    NS,    NS,    NS,    NS,    NS, /*  ¡¢£¤¥¦§ */
-           NS,    NS,    NS,    NS, 02006,    NS,    NS,    NS, /* ¨©ª«¬­®¯ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* °±²³´µ¶· */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ¸¹º»¼½¾¿ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ÀÁÂÃÄÅÆÇ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ÈÉÊËÌÍÎÏ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ÐÑÒÓÔÕÖ× */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ØÙÚÛÜÝÞß */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* àáâãäåæç */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* èéêëìíîï */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS, /* ðñòóôõö÷ */
-           NS,    NS,    NS,    NS,    NS,    NS,    NS,    NS /* øùúûüýþÿ */
       }
     },
     /* DEC 026 (historical, no lowercase) */

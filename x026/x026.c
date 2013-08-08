@@ -159,6 +159,7 @@ static AppRes appres;
 static XrmOptionDescRec options[]= {
 	{ "-ifont",	".ifont",	XrmoptionSepArg,	NULL },
 	{ "-nonumber",	".autoNumber",  XrmoptionNoArg,		"False" },
+	{ "-number",	".autoNumber",  XrmoptionNoArg,		"True" },
 	{ "-typeahead",	".typeahead",	XrmoptionNoArg,		"True" },
 	{ "-mono",	".cabinet",	XrmoptionNoArg,		"black" },
 	{ "-charset",	".charset",	XrmoptionSepArg,	NULL },
@@ -192,13 +193,13 @@ static XtResource resources[] = {
 	{ "ifont", "IFont", XtRString, sizeof(String),
 	  offset(ifontname), XtRString, 0 },
 	{ "autoNumber", "AutoNumber", XtRBoolean, sizeof(Boolean),
-	  offset(autonumber), XtRString, "True" },
+	  offset(autonumber), XtRString, "False" },
 	{ "typeahead", "Typeahead", XtRBoolean, sizeof(Boolean),
 	  offset(typeahead), XtRString, "True" },
 	{ "charset", "Charset", XtRString, sizeof(String),
-	  offset(charset), XtRString, "bcd-h" },
+	  offset(charset), XtRString, NULL },
 	{ "card", "Card", XtRString, sizeof(String),
-	  offset(card), XtRString, "collins" },
+	  offset(card), XtRString, NULL },
 	{ "batchFile", "BatchFile", XtRString, sizeof(String),
 	  offset(batchfile), XtRString, NULL },
 	{ "remoteCtl", "RemoteCtl", XtRBoolean, sizeof(Boolean),
@@ -295,17 +296,19 @@ usage(void)
 			programname);
 	fprintf(stderr, "x026-options:\n\
   -ifont <font>    Interpreter (card edge) font, defaults to 7x13\n\
-  -nonumber        Do not automatically number cards in cols 73..80\n\
+  -number          Automatically number cards in cols 73..80\n\
   -charset <name>  Keypunch character set:\n");
 	for (cs = next_charset(NULL); cs != NULL; cs = next_charset(cs)) {
-		fprintf(stderr, "    %-9s %s\n",
-			charset_name(cs), charset_desc(cs));
+		fprintf(stderr, "    %-9s %s%s\n",
+			charset_name(cs), charset_desc(cs),
+			(cs == default_charset())? " (default)": "");
 	}
 	fprintf(stderr, "\
   -card <name>     Card image:\n");
 	for (ci = next_cardimg(NULL); ci != NULL; ci = next_cardimg(ci)) {
-		fprintf(stderr, "    %-9s %s\n",
-			cardimg_name(ci), cardimg_desc(ci));
+		fprintf(stderr, "    %-9s %s%s\n",
+			cardimg_name(ci), cardimg_desc(ci),
+			(ci == default_cardimg())? " (default)": "");
 	}
 	fprintf(stderr, "\
   -026ftn          Alias for '-charset bcd-h'\n\
@@ -366,14 +369,18 @@ main(int argc, char *argv[])
 		XtError("Can't load interpreter font");
 
 	/* Pick out the character set. */
-	ccharset = find_charset(appres.charset);
-	if (ccharset == NULL) {
+	if (appres.charset != NULL) {
+		ccharset = find_charset(appres.charset);
+		if (ccharset == NULL) {
+			ccharset = default_charset();
+			fprintf(stderr, "No such charset: '%s', "
+					"defaulting to '%s'\n"
+					"Use '-help' to list the available "
+					"character sets\n",
+					appres.charset, charset_name(ccharset));
+		}
+	} else {
 		ccharset = default_charset();
-		fprintf(stderr, "No such charset: '%s', "
-				"defaulting to '%s'\n"
-		                "Use '-help' to list the available "
-				"character sets\n",
-				appres.charset, charset_name(ccharset));
 	}
 
 	/* Define the widgets. */
@@ -564,11 +571,16 @@ define_widgets(void)
 	XtRealizeWidget(toplevel);
 
 	/* Figure out the card image. */
-	if ((ccardimg = find_cardimg(appres.card)) == NULL) {
+	if (appres.card != NULL) {
+		if ((ccardimg = find_cardimg(appres.card)) == NULL) {
+			ccardimg = default_cardimg();
+			fprintf(stderr, "No such card '%s', defaulting to "
+					"'%s'\n"
+					"Use '-help' to list the types\n",
+					appres.card, cardimg_name(ccardimg));
+		}
+	} else {
 		ccardimg = default_cardimg();
-		fprintf(stderr, "No such card '%s', defaulting to '%s'\n"
-				"Use '-help' to list the types\n",
-				appres.card, cardimg_name(ccardimg));
 	}
 	attributes.valuemask = XpmSize;
 	if (XpmCreatePixmapFromData(display, XtWindow(container),
