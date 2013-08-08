@@ -6,7 +6,7 @@
  *   both that copyright notice and this permission notice appear in
  *   supporting documentation.
  *
- * x026 -- A Keypunch Simluator
+ * x029 -- A Keypunch Simluator
  */
 
 #include <stdio.h>
@@ -33,7 +33,7 @@
 #include "hole.xpm"		/* hole image */
 #include "off60.xpm"		/* switch, off */
 #include "on60.xpm"		/* switch, on */
-#include "x026.bm"		/* icon */
+#include "x029.bm"		/* icon */
 
 enum {
     T_AUTO_SKIP_DUP,
@@ -292,9 +292,9 @@ usage(void)
 	charset_t cs = NULL;
 	cardimg_t ci = NULL;
 
-	fprintf(stderr, "Usage: %s [x026-options] [Xt-options]\n",
+	fprintf(stderr, "Usage: %s [x029-options] [Xt-options]\n",
 			programname);
-	fprintf(stderr, "x026-options:\n\
+	fprintf(stderr, "x029-options:\n\
   -ifont <font>    Interpreter (card edge) font, defaults to 7x13\n\
   -number          Automatically number cards in cols 73..80\n\
   -charset <name>  Keypunch character set:\n");
@@ -388,7 +388,7 @@ main(int argc, char *argv[])
 
 	/* Set up a cute (?) icon. */
 	icon = XCreateBitmapFromData(display, XtWindow(toplevel),
-	    (char *)x026_bits, x026_width, x026_height);
+	    (char *)x029_bits, x029_width, x029_height);
 	XtVaSetValues(toplevel, XtNiconPixmap, icon, XtNiconMask, icon, NULL);
 
 	/* Allow us to die gracefully. */

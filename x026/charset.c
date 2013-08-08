@@ -6,7 +6,7 @@
  *   both that copyright notice and this permission notice appear in
  *   supporting documentation.
  *
- * x026 character set definitions.
+ * x029 character set definitions.
  */
 
 #include <string.h>

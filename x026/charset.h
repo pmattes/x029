@@ -6,7 +6,7 @@
  *   both that copyright notice and this permission notice appear in
  *   supporting documentation.
  *
- * x026 character set support
+ * x029 character set support
  */
 
 #if !defined(CHARSET_H) /*[*/

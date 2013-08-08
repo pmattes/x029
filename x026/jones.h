@@ -6,7 +6,7 @@
  *   both that copyright notice and this permission notice appear in
  *   supporting documentation.
  *
- * x026 definitions from Doug Jones' punched card file convention.
+ * x029 definitions from Doug Jones' punched card file convention.
  */
 
 #if !defined(JONES_H) /*[*/

@@ -6,7 +6,7 @@
  *   both that copyright notice and this permission notice appear in
  *   supporting documentation.
  *
- * x026 card images.
+ * x029 card images.
  */
 
 #if 0
