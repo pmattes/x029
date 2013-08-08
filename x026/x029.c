@@ -33,6 +33,12 @@
 #include "hole.xpm"		/* hole image */
 #include "off60.xpm"		/* switch, off */
 #include "on60.xpm"		/* switch, on */
+#include "feed.xpm"		/* FEED key */
+#include "feed_pressed.xpm"	/* FEED key */
+#include "rel.xpm"		/* REL key */
+#include "rel_pressed.xpm"	/* REL key */
+#include "red_off.xpm"		/* power switch */
+#include "red_on.xpm"		/* power switch */
 #include "x029.bm"		/* icon */
 
 enum {
@@ -107,8 +113,13 @@ static XFontStruct	*ifontinfo;
 static Atom		a_delete_me;
 static int		line_number = 100;
 static Pixmap		hole_pixmap;
-charset_t		ccharset = NULL;
-cardimg_t		ccardimg = NULL;
+static charset_t	ccharset = NULL;
+static cardimg_t	ccardimg = NULL;
+
+static Pixmap		rel, rel_pressed, feed, feed_pressed;
+static Pixmap		red_off, red_on;
+static Widget		rel_widget, feed_widget;
+static Widget		power_widget;
 
 int			batchfd = -1;
 
@@ -218,14 +229,6 @@ static String fallbacks[] = {
 	"*Off.foreground: white",
 	"*Off.background: red3",
 	"*Off.borderColor: red4",
-	"*feed.font:	6x13",
-	"*feed.foreground: white",
-	"*feed.background: deepskyblue2",
-	"*feed.borderColor: deepskyblue3",
-	"*rel.font:	6x13",
-	"*rel.foreground: white",
-	"*rel.background: deepskyblue2",
-	"*rel.borderColor: deepskyblue3",
 	"*dialog*value*font: fixed",
 	"*switch.font:  6x10",
 	"*switch.background:  grey92",
@@ -241,7 +244,7 @@ static void multi_punch_data(Widget, XEvent *, String *, Cardinal *);
 static void delete_window(Widget, XEvent *, String *, Cardinal *);
 static void home(Widget, XEvent *, String *, Cardinal *);
 static void left(Widget, XEvent *, String *, Cardinal *);
-static void rel(Widget, XEvent *, String *, Cardinal *);
+static void release(Widget, XEvent *, String *, Cardinal *);
 static void redraw(Widget, XEvent *, String *, Cardinal *);
 static void right(Widget, XEvent *, String *, Cardinal *);
 static void tab(Widget, XEvent *, String *, Cardinal *);
@@ -260,7 +263,7 @@ static XtActionsRec actions[] = {
 	{ "DeleteWindow", delete_window },
 	{ "Home",	home },
 	{ "Left",	left },
-	{ "Rel",	rel },
+	{ "Release",	release },
 	{ "Redraw",	redraw },
 	{ "Right",	right },
 	{ "Tab",	tab },
@@ -284,6 +287,7 @@ static void enq_quit(void);
 static void enq_delay(void);
 static void do_release(int delay);
 static void batch_fsm(void);
+static void pop_rel(XtPointer data, XtIntervalId *id);
 
 /* Syntax. */
 void
@@ -468,6 +472,20 @@ button_callback(Widget w, XtPointer client_data, XtPointer call_data)
 	(*b->callback)(0);
 }
 
+static void
+power_off(XtPointer data, XtIntervalId *id)
+{
+	exit(0);
+}
+
+/* Callback for power button. */
+static void
+power_callback(Widget w, XtPointer client_data, XtPointer call_data)
+{
+	XtVaSetValues(power_widget, XtNbackgroundPixmap, red_off, NULL);
+	(void) XtAppAddTimeOut(appcontext, VERY_SLOW * 2, power_off, NULL);
+}
+
 /* Definitions for the toggle switches. */
 
 static Pixmap on, off;
@@ -552,9 +570,9 @@ define_widgets(void)
 		<Key>BackSpace:	Left()\n\
 		<Key>Right:	Right()\n\
 		<Key>Home:	Home()\n\
-		<Key>Return:	Rel()\n\
+		<Key>Return:	Release()\n\
 		<Key>KP_Enter:	Home()\n\
-		<Key>Down:	Rel()\n\
+		<Key>Down:	Release()\n\
 		<Key>Tab:	Tab()\n\
 		<Btn2Down>:	insert-selection(PRIMARY)\n\
 		Alt<Key>:	MultiPunchData()\n\
@@ -639,7 +657,27 @@ define_widgets(void)
 	    NULL);
 
 	/* Create the buttons in the lower left. */
-	for (i = 0; button[i].label; i++) {
+	if (XpmCreatePixmapFromData(display, XtWindow(container), red_on_xpm,
+			&red_on, &shapemask, &attributes) != XpmSuccess) {
+		XtError("XpmCreatePixmapFromData failed");
+	}
+	if (XpmCreatePixmapFromData(display, XtWindow(container), red_off_xpm,
+			&red_off, &shapemask, &attributes) != XpmSuccess) {
+		XtError("XpmCreatePixmapFromData failed");
+	}
+	power_widget = XtVaCreateManagedWidget(
+	    "power", commandWidgetClass, container,
+	    XtNbackgroundPixmap, red_on,
+	    XtNlabel, "",
+	    XtNwidth, 45,
+	    XtNheight, 36,
+	    XtNx, BUTTON_GAP,
+	    XtNy, h - CARD_AIR - 36,
+	    XtNborderWidth, 0,
+	    NULL
+	);
+	XtAddCallback(power_widget, XtNcallback, power_callback, NULL);
+	for (i = 1; button[i].label; i++) {
 		ww = XtVaCreateManagedWidget(
 		    button[i].label, commandWidgetClass, container,
 		    XtNwidth, BUTTON_WIDTH,
@@ -664,43 +702,60 @@ define_widgets(void)
 	    XtNlabel, "0",
 	    XtNwidth, KEY_WIDTH,
 	    XtNx, w - BUTTON_GAP - KEY_WIDTH - 2*BUTTON_BW,
-	    XtNy, card_height + 2*CARD_AIR + SWITCH_SKIP + BUTTON_GAP
-		    - (KEY_HEIGHT - BUTTON_HEIGHT),
+	    XtNy, h - CARD_AIR - KEY_HEIGHT,
 	    XtNheight, KEY_HEIGHT,
-	    XtNborderWidth, BUTTON_BW,
+	    XtNborderWidth, 0,
 	    XtNborderColor, appres.background,
 	    XtNresize, False,
 	    NULL);
 
 	/* Add the FEED button. */
-	ww = XtVaCreateManagedWidget(
+	if (XpmCreatePixmapFromData(display, XtWindow(container), feed_xpm,
+			&feed, &shapemask, &attributes) != XpmSuccess) {
+		XtError("XpmCreatePixmapFromData failed");
+	}
+	if (XpmCreatePixmapFromData(display, XtWindow(container),
+			feed_pressed_xpm, &feed_pressed, &shapemask,
+			&attributes) != XpmSuccess) {
+		XtError("XpmCreatePixmapFromData failed");
+	}
+	feed_widget = XtVaCreateManagedWidget(
 	    "feed", commandWidgetClass, container,
-	    XtNlabel, "FEED",
+	    XtNborderWidth, 0,
+	    XtNlabel, "",
+	    XtNbackgroundPixmap, feed,
 	    XtNwidth, KEY_WIDTH,
-	    XtNx, w - 2* (BUTTON_GAP + KEY_WIDTH + 2*BUTTON_BW),
-	    XtNy, card_height + 2*CARD_AIR + SWITCH_SKIP + BUTTON_GAP
-		    - (KEY_HEIGHT - BUTTON_HEIGHT),
+	    XtNx, w - 2 * (BUTTON_GAP + KEY_WIDTH + 2*BUTTON_BW),
+	    XtNy, h - CARD_AIR - KEY_HEIGHT,
 	    XtNheight, KEY_HEIGHT,
-	    XtNborderWidth, BUTTON_BW,
 	    XtNhighlightThickness, 0,
 	    XtNsensitive, mode == M_INTERACTIVE,
 	    NULL);
-	XtAddCallback(ww, XtNcallback, feed_button, NULL);
+	XtAddCallback(feed_widget, XtNcallback, feed_button, NULL);
 
 	/* Add the REL button. */
-	ww = XtVaCreateManagedWidget(
+	if (XpmCreatePixmapFromData(display, XtWindow(container), rel_xpm,
+			&rel, &shapemask, &attributes) != XpmSuccess) {
+		XtError("XpmCreatePixmapFromData failed");
+	}
+	if (XpmCreatePixmapFromData(display, XtWindow(container),
+			rel_pressed_xpm, &rel_pressed, &shapemask,
+			&attributes) != XpmSuccess) {
+		XtError("XpmCreatePixmapFromData failed");
+	}
+	rel_widget = XtVaCreateManagedWidget(
 	    "rel", commandWidgetClass, container,
-	    XtNlabel, "REL",
+	    XtNborderWidth, 0,
+	    XtNlabel, "",
+	    XtNbackgroundPixmap, rel,
 	    XtNwidth, KEY_WIDTH,
-	    XtNx, w - 3* (BUTTON_GAP + KEY_WIDTH + 2*BUTTON_BW),
-	    XtNy, card_height + 2*CARD_AIR + SWITCH_SKIP + BUTTON_GAP
-		    - (KEY_HEIGHT - BUTTON_HEIGHT),
+	    XtNx, w - 2 * (BUTTON_GAP + KEY_WIDTH + 2*BUTTON_BW) - KEY_WIDTH,
+	    XtNy, h - CARD_AIR - KEY_HEIGHT,
 	    XtNheight, KEY_HEIGHT,
-	    XtNborderWidth, BUTTON_BW,
 	    XtNhighlightThickness, 0,
 	    XtNsensitive, mode == M_INTERACTIVE,
 	    NULL);
-	XtAddCallback(ww, XtNcallback, rel_button, NULL);
+	XtAddCallback(rel_widget, XtNcallback, rel_button, NULL);
 
 	/* Add the switches. */
 	if (XpmCreatePixmapFromData(display, XtWindow(container), off60_xpm,
@@ -1394,10 +1449,15 @@ home(Widget wid, XEvent *event, String *params, Cardinal *num_params)
  * This is mapped to the Enter (X11 'Return') key, which is the 029 REL key.
  */
 static void
-rel(Widget wid, XEvent *event, String *params, Cardinal *num_params)
+release_backend(void)
 {
+    	/* Press the REL button. */
+	XtVaSetValues(rel_widget, XtNbackgroundPixmap, rel_pressed, NULL);
+	(void) XtAppAddTimeOut(appcontext, VERY_SLOW, pop_rel, NULL);
+
 	if (appres.debug) {
-		printf("rel(%s)\n", card_in_punch_station? "card": "no card");
+		printf("release(%s)\n",
+			card_in_punch_station? "card": "no card");
 	}
 
 	if (card_in_punch_station) {
@@ -1405,6 +1465,12 @@ rel(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 		if (toggles[T_AUTO_FEED].on)
 			do_feed();
 	}
+}
+
+static void
+release(Widget wid, XEvent *event, String *params, Cardinal *num_params)
+{
+	release_backend();
 }
 
 static void
@@ -1456,19 +1522,33 @@ discard_button(int ignored)
 	enq_event(VISIBLE, 0, False, 0);
 }
 
+static void
+pop_feed(XtPointer data, XtIntervalId *id)
+{
+	XtVaSetValues(feed_widget, XtNbackgroundPixmap, feed, NULL);
+}
+
 /* Feed a new card. */
 static void
 feed_button(Widget w, XtPointer client_data, XtPointer call_data)
 {
+	XtVaSetValues(feed_widget, XtNbackgroundPixmap, feed_pressed, NULL);
+	(void) XtAppAddTimeOut(appcontext, VERY_SLOW, pop_feed, NULL);
 	if (!eq_count && !card_in_punch_station)
 		do_feed();
+}
+
+static void
+pop_rel(XtPointer data, XtIntervalId *id)
+{
+	XtVaSetValues(rel_widget, XtNbackgroundPixmap, rel, NULL);
 }
 
 /* Release the card in the punch station. */
 static void
 rel_button(Widget w, XtPointer client_data, XtPointer call_data)
 {
-	rel(NULL, NULL, NULL, NULL);
+	release_backend();
 }
 
 /*
