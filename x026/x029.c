@@ -1273,7 +1273,7 @@ void (*eq_fn[])(int) = {
 char *eq_name[] = {
 	"DUMMY", "DATA", "MULTI", "LEFT", "KYBD_RIGHT", "HOME",
 	"PAN_RIGHT", "PAN_LEFT", "PAN_UP", "SLAM", "NEWCARD", "QUIT",
-	"INVISIBLE", "VISIBLE", "REL_RIGHT"
+	"INVISIBLE", "VISIBLE", "REL_RIGHT",
 };
 typedef struct event {
 	struct event *next;
@@ -1947,7 +1947,7 @@ typedef enum {
 	BS_READ,	/* need to read from the file */
 	BS_CHAR,	/* need to process a character from the file */
 	BS_SPACE,	/* need to space over the rest of the card */
-	BS_EOF		/* done */
+	BS_EOF,		/* done */
 } batch_state_t;
 static const char *bs_name[] = { "READ", "CHAR", "SPACE", "EOF" };
 static batch_state_t bs = BS_READ;
@@ -2000,7 +2000,6 @@ batch_fsm(void)
 					}
 					close(batchfd);
 					batchfd = -1;
-					enq_quit();
 
 					/* Next, exit. */
 					bs = BS_EOF;
@@ -2102,7 +2101,9 @@ batch_fsm(void)
 
 		case BS_EOF:
 			/* Done. */
-			exit(0);
+			XtVaSetValues(power_widget, XtNbackgroundPixmap,
+				red_off, NULL);
+			enq_quit();
 			break;
 		}
 	} while (eq_first == NULL);
