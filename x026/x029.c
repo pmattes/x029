@@ -155,6 +155,7 @@ static void do_slam(int);
 static void do_newcard(int);
 static void do_power_on(int);
 static void do_press_feed(int);
+static void do_press_rel(int);
 
 /* Application resources. */
 typedef struct {
@@ -293,6 +294,7 @@ static void define_widgets(void);
 #define NC_INTERACTIVE		True
 #define NC_BATCH		False
 static void startup_feed(void);
+static void startup_power(void);
 static void do_feed(void);
 static void save_popup(void);
 static Boolean add_char(char c);
@@ -400,25 +402,6 @@ main(int argc, char *argv[])
 		ccharset = default_charset();
 	}
 
-	/* Define the widgets. */
-	define_widgets();
-
-	/* Set up a cute (?) icon. */
-	icon = XCreateBitmapFromData(display, XtWindow(toplevel),
-	    (char *)x029_bits, x029_width, x029_height);
-	XtVaSetValues(toplevel, XtNiconPixmap, icon, XtNiconMask, icon, NULL);
-
-	/* Allow us to die gracefully. */
-	XSetWMProtocols(display, XtWindow(toplevel), &a_delete_me, 1);
-	table = XtParseTranslationTable(
-	    "<Message>WM_PROTOCOLS: DeleteWindow()");
-	XtOverrideTranslations(toplevel, table);
-
-#if defined(SOUND) /*[*/
-	/* Set up clicks. */
-	audio_init();
-#endif /*]*/
-
 	if (appres.batchfile != NULL) {
 		if (appres.remotectl) {
 			fprintf(stderr, "Batchfile and remotectl in conflict, "
@@ -441,6 +424,25 @@ main(int argc, char *argv[])
 		mode = M_INTERACTIVE;
 	}
 
+	/* Define the widgets. */
+	define_widgets();
+
+	/* Set up a cute (?) icon. */
+	icon = XCreateBitmapFromData(display, XtWindow(toplevel),
+	    (char *)x029_bits, x029_width, x029_height);
+	XtVaSetValues(toplevel, XtNiconPixmap, icon, XtNiconMask, icon, NULL);
+
+	/* Allow us to die gracefully. */
+	XSetWMProtocols(display, XtWindow(toplevel), &a_delete_me, 1);
+	table = XtParseTranslationTable(
+	    "<Message>WM_PROTOCOLS: DeleteWindow()");
+	XtOverrideTranslations(toplevel, table);
+
+#if defined(SOUND) /*[*/
+	/* Set up clicks. */
+	audio_init();
+#endif /*]*/
+
 	if (mode != M_INTERACTIVE && batchfd == fileno(stdin)) {
 		if (fcntl(batchfd, F_SETFL,
 			    fcntl(batchfd, F_GETFL) | O_NONBLOCK) < 0) {
@@ -451,10 +453,14 @@ main(int argc, char *argv[])
 
 	if (mode == M_INTERACTIVE || mode == M_REMOTECTL) {
 		startup_feed();
+	} else {
+		startup_power();
 	}
+#if 0
 	if (mode != M_INTERACTIVE) {
 		batch_fsm();
 	}
+#endif
 
 	/* Process X events forever. */
 	XtAppMainLoop(appcontext);
@@ -657,8 +663,7 @@ define_widgets(void)
 	}
 	power_widget = XtVaCreateManagedWidget(
 	    "power", commandWidgetClass, container,
-	    XtNbackgroundPixmap,
-		(mode == M_INTERACTIVE || mode == M_REMOTECTL)? red_off: red_on,
+	    XtNbackgroundPixmap, red_off,
 	    XtNlabel, "",
 	    XtNwidth, POWER_WIDTH,
 	    XtNheight, POWER_HEIGHT,
@@ -1256,7 +1261,7 @@ do_visible(int ignored)
  */
 enum evtype { DUMMY, DATA, MULTI, LEFT, KYBD_RIGHT, HOME,
 	      PAN_RIGHT, PAN_LEFT, PAN_UP, SLAM, NEWCARD, QUIT,
-	      INVISIBLE, VISIBLE, REL_RIGHT, POWER_ON, PRESS_FEED };
+	      INVISIBLE, VISIBLE, REL_RIGHT, POWER_ON, PRESS_FEED, PRESS_REL };
 void (*eq_fn[])(int) = {
 	do_nothing,
 	do_data,
@@ -1275,11 +1280,13 @@ void (*eq_fn[])(int) = {
 	do_rel_right,
 	do_power_on,
 	do_press_feed,
+	do_press_rel,
 };
 char *eq_name[] = {
 	"DUMMY", "DATA", "MULTI", "LEFT", "KYBD_RIGHT", "HOME",
 	"PAN_RIGHT", "PAN_LEFT", "PAN_UP", "SLAM", "NEWCARD", "QUIT",
 	"INVISIBLE", "VISIBLE", "REL_RIGHT", "POWER_ON", "PRESS_FEED",
+	"PRESS_REL"
 };
 typedef struct event {
 	struct event *next;
@@ -1654,6 +1661,19 @@ startup_feed(void)
 	enq_event(POWER_ON, 0, False, VERY_SLOW);
 	enq_event(PRESS_FEED, 0, False, VERY_SLOW);
 	do_feed();
+}
+
+static void
+startup_power(void)
+{
+	enq_event(POWER_ON, 0, False, VERY_SLOW);
+}
+
+static void
+do_press_rel(int ignored)
+{
+	XtVaSetValues(rel_widget, XtNbackgroundPixmap, rel_pressed, NULL);
+	(void) XtAppAddTimeOut(appcontext, VERY_SLOW, pop_rel, NULL);
 }
 
 #define NP	5
@@ -2059,6 +2079,16 @@ batch_fsm(void)
 
 		case BS_CHAR:
 			if (!card_in_punch_station) {
+				static Boolean unfed = True;
+
+				if (mode == M_BATCH && unfed) {
+					unfed = False;
+					XtVaSetValues(feed_widget,
+						XtNbackgroundPixmap,
+						feed_pressed, NULL);
+					(void) XtAppAddTimeOut(appcontext,
+						VERY_SLOW, pop_feed, NULL);
+				}
 				do_feed();
 				if (mode == M_BATCH) {
 					enq_delay();
@@ -2077,7 +2107,10 @@ batch_fsm(void)
 				 * spacing to the end of the card.
 				 */
 				if (col)
-					enq_delay();
+					enq_event(PRESS_REL, 0, False,
+						VERY_SLOW);
+				else
+					enq_event(PRESS_REL, 0, False, 0);
 				bs = BS_SPACE;
 				break;
 			}
