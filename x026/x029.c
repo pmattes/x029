@@ -153,6 +153,8 @@ static void do_pan_left(int);
 static void do_pan_up(int);
 static void do_slam(int);
 static void do_newcard(int);
+static void do_power_on(int);
+static void do_press_feed(int);
 
 /* Application resources. */
 typedef struct {
@@ -290,6 +292,7 @@ static void define_widgets(void);
 #define NC_SCROLL_IF_CARD	False
 #define NC_INTERACTIVE		True
 #define NC_BATCH		False
+static void startup_feed(void);
 static void do_feed(void);
 static void save_popup(void);
 static Boolean add_char(char c);
@@ -447,7 +450,7 @@ main(int argc, char *argv[])
 	}
 
 	if (mode == M_INTERACTIVE || mode == M_REMOTECTL) {
-		do_feed();
+		startup_feed();
 	}
 	if (mode != M_INTERACTIVE) {
 		batch_fsm();
@@ -654,7 +657,8 @@ define_widgets(void)
 	}
 	power_widget = XtVaCreateManagedWidget(
 	    "power", commandWidgetClass, container,
-	    XtNbackgroundPixmap, red_on,
+	    XtNbackgroundPixmap,
+		(mode == M_INTERACTIVE || mode == M_REMOTECTL)? red_off: red_on,
 	    XtNlabel, "",
 	    XtNwidth, POWER_WIDTH,
 	    XtNheight, POWER_HEIGHT,
@@ -1252,7 +1256,7 @@ do_visible(int ignored)
  */
 enum evtype { DUMMY, DATA, MULTI, LEFT, KYBD_RIGHT, HOME,
 	      PAN_RIGHT, PAN_LEFT, PAN_UP, SLAM, NEWCARD, QUIT,
-	      INVISIBLE, VISIBLE, REL_RIGHT };
+	      INVISIBLE, VISIBLE, REL_RIGHT, POWER_ON, PRESS_FEED };
 void (*eq_fn[])(int) = {
 	do_nothing,
 	do_data,
@@ -1269,11 +1273,13 @@ void (*eq_fn[])(int) = {
 	do_invisible,
 	do_visible,
 	do_rel_right,
+	do_power_on,
+	do_press_feed,
 };
 char *eq_name[] = {
 	"DUMMY", "DATA", "MULTI", "LEFT", "KYBD_RIGHT", "HOME",
 	"PAN_RIGHT", "PAN_LEFT", "PAN_UP", "SLAM", "NEWCARD", "QUIT",
-	"INVISIBLE", "VISIBLE", "REL_RIGHT",
+	"INVISIBLE", "VISIBLE", "REL_RIGHT", "POWER_ON", "PRESS_FEED",
 };
 typedef struct event {
 	struct event *next;
@@ -1626,6 +1632,28 @@ do_feed(void)
 		enq_event(PAN_RIGHT, 0, False, VERY_FAST);
 	}
 	enq_event(VISIBLE, 0, False, 0);
+}
+
+/* Interactive start-up sequence. */
+static void
+do_power_on(int ignored)
+{
+	XtVaSetValues(power_widget, XtNbackgroundPixmap, red_on, NULL);
+}
+
+static void
+do_press_feed(int ignored)
+{
+	XtVaSetValues(feed_widget, XtNbackgroundPixmap, feed_pressed, NULL);
+	(void) XtAppAddTimeOut(appcontext, VERY_SLOW, pop_feed, NULL);
+}
+
+static void
+startup_feed(void)
+{
+	enq_event(POWER_ON, 0, False, VERY_SLOW);
+	enq_event(PRESS_FEED, 0, False, VERY_SLOW);
+	do_feed();
 }
 
 #define NP	5
