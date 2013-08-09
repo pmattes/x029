@@ -699,7 +699,7 @@ define_widgets(void)
 	/* Add the position counter in the lower right. */
 	posw = XtVaCreateManagedWidget(
 	    "pos", labelWidgetClass, container,
-	    XtNlabel, "0",
+	    XtNlabel, "-",
 	    XtNwidth, KEY_WIDTH,
 	    XtNx, w - BUTTON_GAP - KEY_WIDTH - 2*BUTTON_BW,
 	    XtNy, h - CARD_AIR - KEY_HEIGHT,
@@ -951,9 +951,9 @@ set_posw(int c)
 
 	col = c;
 	if (col >= N_COLS)
-		strcpy(bb, "--");
+		strcpy(bb, "-");
 	else
-		sprintf(bb, "%02d", col+1);
+		sprintf(bb, "%d", col+1);
 	XtVaSetValues(posw, XtNlabel, bb, NULL);
 }
 
@@ -984,7 +984,6 @@ do_newcard(int replace)
 	(void) memset(ccard->coltxt, ' ', sizeof(ccard->coltxt));
 	(void) memset(ccard->holes, 0, sizeof(ccard->holes));
 	(void) memset(ccard->n_ov, 0, sizeof(ccard->n_ov));
-	set_posw(0);
 	if (appres.autonumber) {
 		char ln_buf[9];
 
@@ -1221,6 +1220,7 @@ static void
 do_visible(int ignored)
 {
 	card_in_punch_station = True;
+	set_posw(0);
 }
 
 /*
