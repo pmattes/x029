@@ -234,6 +234,7 @@ static XtResource resources[] = {
 static String fallbacks[] = {
 	"*ifont:	7x13",
 	"*pos.font:	6x13bold",
+	"*pos.background: wheat2",
 	"*Off.foreground: white",
 	"*Off.background: red3",
 	"*Off.borderColor: red4",
@@ -1236,6 +1237,7 @@ static void
 do_invisible(int ignored)
 {
 	card_in_punch_station = False;
+	XtVaSetValues(posw, XtNlabel, "-", NULL);
 }
 
 static void
@@ -1534,6 +1536,7 @@ drop_button(Widget w, XtPointer client_data, XtPointer call_data)
 	if (ccard) {
 		for (i = 0; i <= col; i++)
 			enq_event(LEFT, 0, False, FAST);
+		enq_event(INVISIBLE, 0, False, 0);
 		for (i = 0; i < N_COLS/2; i++)
 			enq_event(PAN_LEFT, 0, False, FAST);
 	}
