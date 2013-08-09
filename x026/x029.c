@@ -39,6 +39,10 @@
 #include "rel_pressed.xpm"	/* REL key */
 #include "red_off.xpm"		/* power switch */
 #include "red_on.xpm"		/* power switch */
+#include "save.xpm"		/* SAVE button */
+#include "save_pressed.xpm"	/* SAVE button */
+#include "drop.xpm"		/* DROP button */
+#include "drop_pressed.xpm"	/* DROP button */
 #include "x029.bm"		/* icon */
 
 enum {
@@ -101,6 +105,9 @@ char *bottom_label3[] = { "DUP", NULL, "SEL", NULL, NULL, NULL, NULL, NULL };
 #define KEY_WIDTH	40
 #define KEY_HEIGHT	40
 
+#define POWER_WIDTH	50
+#define POWER_HEIGHT	40
+
 static char		*programname;
 static Widget		toplevel;
 static XtAppContext	appcontext;
@@ -117,9 +124,12 @@ static charset_t	ccharset = NULL;
 static cardimg_t	ccardimg = NULL;
 
 static Pixmap		rel, rel_pressed, feed, feed_pressed;
+static Pixmap		save, save_pressed, drop, drop_pressed;
 static Pixmap		red_off, red_on;
 static Widget		rel_widget, feed_widget;
 static Widget		power_widget;
+static Widget		save_widget;
+static Widget		drop_widget;
 
 int			batchfd = -1;
 
@@ -143,8 +153,6 @@ static void do_pan_left(int);
 static void do_pan_up(int);
 static void do_slam(int);
 static void do_newcard(int);
-
-static void save(int ignored);
 
 /* Application resources. */
 typedef struct {
@@ -252,9 +260,10 @@ static void insert_selection(Widget, XEvent *, String *, Cardinal *);
 static void confirm(Widget, XEvent *, String *, Cardinal *);
 
 /* Xt callbacks. */
-static void discard_button(int ignored);
 static void feed_button(Widget, XtPointer, XtPointer);
 static void rel_button(Widget, XtPointer, XtPointer);
+static void save_button(Widget, XtPointer, XtPointer);
+static void drop_button(Widget, XtPointer, XtPointer);
 
 /* Actions. */
 static XtActionsRec actions[] = {
@@ -449,29 +458,6 @@ main(int argc, char *argv[])
 	return 0;
 }
 
-
-/* Definitions for buttons along the bottom left. */
-
-struct button {
-	char *label;
-	Boolean batch_disable;
-	void (*callback)(int);
-} button[] = {
-	{ "Off", False, (void (*)())exit },
-	{ "Save", True, save },
-	{ "Drop", True, discard_button },
-	{ NULL, False, NULL },
-};
-
-/* Callback function for buttons. */
-static void
-button_callback(Widget w, XtPointer client_data, XtPointer call_data)
-{
-	struct button *b = (struct button *)client_data;
-
-	(*b->callback)(0);
-}
-
 static void
 power_off(XtPointer data, XtIntervalId *id)
 {
@@ -656,7 +642,7 @@ define_widgets(void)
 	    XtNbackgroundPixmap, pixmap,
 	    NULL);
 
-	/* Create the buttons in the lower left. */
+	/* Add the power button. */
 	if (XpmCreatePixmapFromData(display, XtWindow(container), red_on_xpm,
 			&red_on, &shapemask, &attributes) != XpmSuccess) {
 		XtError("XpmCreatePixmapFromData failed");
@@ -669,32 +655,60 @@ define_widgets(void)
 	    "power", commandWidgetClass, container,
 	    XtNbackgroundPixmap, red_on,
 	    XtNlabel, "",
-	    XtNwidth, 45,
-	    XtNheight, 36,
+	    XtNwidth, POWER_WIDTH,
+	    XtNheight, POWER_HEIGHT,
 	    XtNx, BUTTON_GAP,
-	    XtNy, h - CARD_AIR - 36,
+	    XtNy, h - CARD_AIR - POWER_HEIGHT,
 	    XtNborderWidth, 0,
 	    NULL
 	);
 	XtAddCallback(power_widget, XtNcallback, power_callback, NULL);
-	for (i = 1; button[i].label; i++) {
-		ww = XtVaCreateManagedWidget(
-		    button[i].label, commandWidgetClass, container,
-		    XtNwidth, BUTTON_WIDTH,
-		    XtNheight, BUTTON_HEIGHT,
-		    XtNx, BUTTON_GAP + i*(2*BUTTON_BW + BUTTON_WIDTH + BUTTON_GAP),
-		    XtNy, card_height + 2*CARD_AIR + SWITCH_SKIP + BUTTON_GAP,
-		    XtNborderWidth, BUTTON_BW,
-		    XtNsensitive, !(button[i].batch_disable &&
-				    mode != M_INTERACTIVE),
-		    NULL
-		);
-		if (i != 0)
-			XtVaSetValues(ww, XtNborderColor, appres.background,
-				NULL);
-		XtAddCallback(ww, XtNcallback, button_callback,
-		    (XtPointer)&button[i]);
+
+	/* Add the save button. */
+	if (XpmCreatePixmapFromData(display, XtWindow(container), save_xpm,
+			&save, &shapemask, &attributes) != XpmSuccess) {
+		XtError("XpmCreatePixmapFromData failed");
 	}
+	if (XpmCreatePixmapFromData(display, XtWindow(container),
+			save_pressed_xpm, &save_pressed, &shapemask,
+			&attributes) != XpmSuccess) {
+		XtError("XpmCreatePixmapFromData failed");
+	}
+	save_widget = XtVaCreateManagedWidget(
+	    "save", commandWidgetClass, container,
+	    XtNbackgroundPixmap, save,
+	    XtNlabel, "",
+	    XtNwidth, KEY_WIDTH,
+	    XtNheight, KEY_HEIGHT,
+	    XtNx, BUTTON_GAP + POWER_WIDTH + BUTTON_GAP,
+	    XtNy, h - CARD_AIR - KEY_HEIGHT,
+	    XtNborderWidth, 0,
+	    NULL
+	);
+	XtAddCallback(save_widget, XtNcallback, save_button, NULL);
+
+	/* Add the drop button. */
+	if (XpmCreatePixmapFromData(display, XtWindow(container), drop_xpm,
+			&drop, &shapemask, &attributes) != XpmSuccess) {
+		XtError("XpmCreatePixmapFromData failed");
+	}
+	if (XpmCreatePixmapFromData(display, XtWindow(container),
+			drop_pressed_xpm, &drop_pressed, &shapemask,
+			&attributes) != XpmSuccess) {
+		XtError("XpmCreatePixmapFromData failed");
+	}
+	drop_widget = XtVaCreateManagedWidget(
+	    "drop", commandWidgetClass, container,
+	    XtNbackgroundPixmap, drop,
+	    XtNlabel, "",
+	    XtNwidth, KEY_WIDTH,
+	    XtNheight, KEY_HEIGHT,
+	    XtNx, BUTTON_GAP + POWER_WIDTH + BUTTON_GAP + KEY_WIDTH,
+	    XtNy, h - CARD_AIR - KEY_HEIGHT,
+	    XtNborderWidth, 0,
+	    NULL
+	);
+	XtAddCallback(drop_widget, XtNcallback, drop_button, NULL);
 
 	/* Add the position counter in the lower right. */
 	posw = XtVaCreateManagedWidget(
@@ -1084,8 +1098,16 @@ first_card(void)
 }
 
 static void
-save(int ignored)
+pop_save(XtPointer data, XtIntervalId *id)
 {
+	XtVaSetValues(save_widget, XtNbackgroundPixmap, save, NULL);
+}
+
+static void
+save_button(Widget w, XtPointer client_data, XtPointer call_data)
+{
+	XtVaSetValues(save_widget, XtNbackgroundPixmap, save_pressed, NULL);
+	(void) XtAppAddTimeOut(appcontext, VERY_SLOW, pop_save, NULL);
 	save_popup();
 }
 
@@ -1487,11 +1509,20 @@ tab(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 	}
 }
 
+static void
+pop_drop(XtPointer data, XtIntervalId *id)
+{
+	XtVaSetValues(drop_widget, XtNbackgroundPixmap, drop, NULL);
+}
+
 /* Throw away this card. */
 static void
-discard_button(int ignored)
+drop_button(Widget w, XtPointer client_data, XtPointer call_data)
 {
 	int i;
+
+	XtVaSetValues(drop_widget, XtNbackgroundPixmap, drop_pressed, NULL);
+	(void) XtAppAddTimeOut(appcontext, VERY_SLOW, pop_drop, NULL);
 
 	if (!card_in_punch_station)
 		return;
