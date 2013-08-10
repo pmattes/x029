@@ -256,9 +256,6 @@ static String fallbacks[] = {
     "*ifont:	7x13",
     "*pos.font:	6x13bold",
     "*pos.background: wheat2",
-    "*Off.foreground: white",
-    "*Off.background: red3",
-    "*Off.borderColor: red4",
     "*dialog*value*font: fixed",
     "*switch.font:  6x10",
     "*switch.background:  grey92",
@@ -1808,6 +1805,8 @@ batch_fsm(void)
     } while (eq_first == NULL);
 
 }
+
+/* Accessor functions for appres. */
 
 Pixel
 get_errcolor(void)
