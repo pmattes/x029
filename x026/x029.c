@@ -123,22 +123,37 @@ static Pixmap		hole_pixmap;
 static charset_t	ccharset = NULL;
 static cardimg_t	ccardimg = NULL;
 
-static Pixmap		rel, rel_pressed, feed, feed_pressed;
+static Pixmap		feed, feed_pressed;
 static Pixmap		save, save_pressed, drop, drop_pressed;
 static Pixmap		red_off, red_on;
-static Widget		rel_widget, feed_widget;
+static Widget		feed_widget;
 static Widget		power_widget;
 static Widget		save_widget;
 static Widget		drop_widget;
 
 int			batchfd = -1;
 
+/* Mode: interactive versus batch. */
 typedef enum {
-	M_INTERACTIVE,	/* interactive */
-	M_BATCH,	/* read from a fixed file */
-	M_REMOTECTL	/* read from stdin incrementally */
+    M_INTERACTIVE,		/* interactive */
+    M_BATCH,			/* read from a fixed file */
+    M_REMOTECTL			/* read from stdin incrementally */
 } imode_t;
 imode_t mode = M_INTERACTIVE;
+
+/* 029 simulated key structure. */
+typedef struct _key {
+    const char *name;		/* descriptive name for debug */
+    Widget widget;		/* Xt widget */
+    Pixmap normal_pixmap;	/* normal (unpressed) pixmap */
+    Pixmap pressed_pixmap;	/* pressed pixmap */
+    XtIntervalId timeout_id;	/* un-press timeout ID, or 0 if none pending */
+    void (*backend)(struct _key *); /* backend */
+} kpkey_t;
+kpkey_t rel_key;		/* REL key */
+kpkey_t feed_key;		/* FEED key */
+kpkey_t save_key;		/* SAVE key */
+kpkey_t drop_key;		/* DROP key */
 
 /* Internal actions. */
 static void do_nothing(int);
@@ -264,8 +279,8 @@ static void insert_selection(Widget, XEvent *, String *, Cardinal *);
 static void confirm(Widget, XEvent *, String *, Cardinal *);
 
 /* Xt callbacks. */
+static void key_press(Widget, XtPointer, XtPointer);
 static void feed_button(Widget, XtPointer, XtPointer);
-static void rel_button(Widget, XtPointer, XtPointer);
 static void save_button(Widget, XtPointer, XtPointer);
 static void drop_button(Widget, XtPointer, XtPointer);
 
@@ -303,6 +318,7 @@ static void enq_delay(void);
 static void do_release(int delay);
 static void batch_fsm(void);
 static void pop_rel(XtPointer data, XtIntervalId *id);
+static void rel_key_backend(kpkey_t *);
 
 /* Syntax. */
 void
@@ -758,20 +774,23 @@ define_widgets(void)
 	XtAddCallback(feed_widget, XtNcallback, feed_button, NULL);
 
 	/* Add the REL button. */
+	memset(&rel_key, '\0', sizeof(rel_key));
+	rel_key.name = "REL";
 	if (XpmCreatePixmapFromData(display, XtWindow(container), rel_xpm,
-			&rel, &shapemask, &attributes) != XpmSuccess) {
+			&rel_key.normal_pixmap, &shapemask, &attributes)
+			    != XpmSuccess) {
 		XtError("XpmCreatePixmapFromData failed");
 	}
 	if (XpmCreatePixmapFromData(display, XtWindow(container),
-			rel_pressed_xpm, &rel_pressed, &shapemask,
+			rel_pressed_xpm, &rel_key.pressed_pixmap, &shapemask,
 			&attributes) != XpmSuccess) {
 		XtError("XpmCreatePixmapFromData failed");
 	}
-	rel_widget = XtVaCreateManagedWidget(
-	    "rel", commandWidgetClass, container,
+	rel_key.widget = XtVaCreateManagedWidget(
+	    rel_key.name, commandWidgetClass, container,
 	    XtNborderWidth, 0,
 	    XtNlabel, "",
-	    XtNbackgroundPixmap, rel,
+	    XtNbackgroundPixmap, rel_key.normal_pixmap,
 	    XtNwidth, KEY_WIDTH,
 	    XtNx, w - 2 * (BUTTON_GAP + KEY_WIDTH + 2*BUTTON_BW) - KEY_WIDTH,
 	    XtNy, h - CARD_AIR - KEY_HEIGHT,
@@ -779,7 +798,9 @@ define_widgets(void)
 	    XtNhighlightThickness, 0,
 	    XtNsensitive, mode == M_INTERACTIVE,
 	    NULL);
-	XtAddCallback(rel_widget, XtNcallback, rel_button, NULL);
+	XtAddCallback(rel_key.widget, XtNcallback, key_press,
+		(XtPointer)&rel_key);
+	rel_key.backend = rel_key_backend;
 
 	/* Add the switches. */
 	if (XpmCreatePixmapFromData(display, XtWindow(container), off60_xpm,
@@ -1486,12 +1507,8 @@ home(Widget wid, XEvent *event, String *params, Cardinal *num_params)
  * This is mapped to the Enter (X11 'Return') key, which is the 029 REL key.
  */
 static void
-release_backend(void)
+rel_key_backend(kpkey_t *key)
 {
-    	/* Press the REL button. */
-	XtVaSetValues(rel_widget, XtNbackgroundPixmap, rel_pressed, NULL);
-	(void) XtAppAddTimeOut(appcontext, VERY_SLOW, pop_rel, NULL);
-
 	if (appres.debug) {
 		printf("release(%s)\n",
 			card_in_punch_station? "card": "no card");
@@ -1507,7 +1524,8 @@ release_backend(void)
 static void
 release(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
-	release_backend();
+    show_key_down(&rel_key);
+    rel_key_backend(&rel_key);
 }
 
 static void
@@ -1585,17 +1603,41 @@ feed_button(Widget w, XtPointer client_data, XtPointer call_data)
 		do_feed();
 }
 
+/* On-screen key support. */
+
+/* Timeout callback. Pop the key back up. */
 static void
-pop_rel(XtPointer data, XtIntervalId *id)
+pop_key(XtPointer data, XtIntervalId *id)
 {
-	XtVaSetValues(rel_widget, XtNbackgroundPixmap, rel, NULL);
+    kpkey_t *key = (kpkey_t *)data;
+
+    XtVaSetValues(key->widget, XtNbackgroundPixmap, key->normal_pixmap, NULL);
 }
 
-/* Release the card in the punch station. */
-static void
-rel_button(Widget w, XtPointer client_data, XtPointer call_data)
+/* Handle graphical transitions for a click. */
+show_key_down(kpkey_t *key)
 {
-	release_backend();
+    XtVaSetValues(key->widget, XtNbackgroundPixmap, key->pressed_pixmap, NULL);
+    if (key->timeout_id != 0) {
+	XtRemoveTimeOut(key->timeout_id);
+    }
+    key->timeout_id = XtAppAddTimeOut(appcontext, VERY_SLOW, pop_key,
+	    (XtPointer)&rel_key);
+}
+
+/*
+ * Mouse click callback. Press the key down, schedule a timeout to pop it
+ * back up, call the key-specific back end.
+ */
+static void
+key_press(Widget w, XtPointer client_data, XtPointer call_data)
+{
+    kpkey_t *key = (kpkey_t *)client_data;
+
+    show_key_down(key);
+    if (key->backend) {
+	key->backend(key);
+    }
 }
 
 /*
@@ -1672,8 +1714,7 @@ startup_power(void)
 static void
 do_press_rel(int ignored)
 {
-	XtVaSetValues(rel_widget, XtNbackgroundPixmap, rel_pressed, NULL);
-	(void) XtAppAddTimeOut(appcontext, VERY_SLOW, pop_rel, NULL);
+    show_key_down(&rel_key);
 }
 
 #define NP	5
