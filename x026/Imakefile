@@ -1,7 +1,7 @@
 /* Imakefile for x029 */
 
 LOCAL_LIBRARIES = $(XAWLIB) $(XMULIB) $(XPMLIB) $(XTOOLLIB) $(XLIB)
-SRCS = x029.c charset.c cardimg.c paste.c
-OBJS = x029.o charset.o cardimg.o paste.o
+SRCS = x029.c charset.c cardimg.c paste.c save.c
+OBJS = x029.o charset.o cardimg.o paste.o save.o
 
 ComplexProgramTarget(x029)

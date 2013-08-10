@@ -26,12 +26,13 @@
 #include <X11/Xaw/Porthole.h>
 #include <X11/xpm.h>
 
+#include "jones.h"
+#include "charset.h"
+#include "cardimg.h"
 #include "x029.h"
 
-#include "jones.h"
-#include "cardimg.h"
-#include "charset.h"
 #include "paste.h"
+#include "save.h"
 
 #include "hole.xpm"		/* hole image */
 #include "off60.xpm"		/* switch, off */
@@ -111,12 +112,14 @@ char *bottom_label3[] = { "DUP", NULL, "SEL", NULL, NULL, NULL, NULL, NULL };
 #define POWER_WIDTH	50
 #define POWER_HEIGHT	40
 
+Widget			toplevel;
 Display			*display;
+int			default_screen;
+charset_t		ccharset = NULL;
+cardimg_t		ccardimg = NULL;
 
 static char		*programname;
-static Widget		toplevel;
 static XtAppContext	appcontext;
-static int		default_screen;
 static int		root_window;
 static int		card_window;
 static int		depth;
@@ -124,8 +127,6 @@ static XFontStruct	*ifontinfo;
 static Atom		a_delete_me;
 static int		line_number = 100;
 static Pixmap		hole_pixmap;
-static charset_t	ccharset = NULL;
-static cardimg_t	ccardimg = NULL;
 
 static Pixmap		red_off, red_on;
 static Widget		power_widget;
@@ -277,7 +278,6 @@ static void release(Widget, XEvent *, String *, Cardinal *);
 static void redraw(Widget, XEvent *, String *, Cardinal *);
 static void right(Widget, XEvent *, String *, Cardinal *);
 static void tab(Widget, XEvent *, String *, Cardinal *);
-static void confirm(Widget, XEvent *, String *, Cardinal *);
 
 /* Xt callbacks. */
 static void key_press(Widget, XtPointer, XtPointer);
@@ -305,7 +305,6 @@ static void define_widgets(void);
 static void startup_power_feed(void);
 static void startup_power(void);
 static void do_feed(void);
-static void save_popup(void);
 static void enq_quit(void);
 static void enq_delay(void);
 static void do_release(int delay);
@@ -525,21 +524,7 @@ toggle_callback(Widget w, XtPointer client_data, XtPointer call_data)
 }
 
 /* Card-image data structures. */
-
-#define N_COLS	80	/* number of columns (80, of course) */
-#define N_ROWS	12	/* number of rows */
-#define N_OV	10	/* number of overpunches */
-
-typedef struct card {
-    unsigned short holes[N_COLS];
-    int n_ov[N_COLS];
-    unsigned char coltxt[N_COLS][N_OV];
-    int seq;
-    struct card *prev;
-    struct card *next;
-} card;
-static card *ccard;
-
+card *ccard;
 static int col = 0;
 static GC gc, invgc, holegc, corner_gc;
 
@@ -1037,8 +1022,8 @@ delete_window(Widget wid, XEvent *event, String *params, Cardinal *num_params)
     exit(0);
 }
 
-/* Find the first card in the deck. */
-static card *
+/* Find the first card in the deck. This is an external entry point. */
+card *
 first_card(void)
 {
     card *c;
@@ -1654,251 +1639,6 @@ queued_press_rel(int ignored)
     show_key_down(&rel_key);
 }
 
-/* 'Save' pop-up. */
-
-static Boolean save_popup_created = False;
-static Widget save_shell, save_dialog;
-
-static void
-center_it(Widget w, XtPointer client_data, XtPointer call_data)
-{
-    Dimension width, height;
-    Position toplevel_x, toplevel_y;
-    Dimension toplevel_width, toplevel_height;
-
-    /* Get the popup's dimensions */
-    XtVaGetValues(w,
-	XtNwidth, &width,
-	XtNheight, &height,
-	NULL);
-
-    /* Get the toplevel position and dimensions. */
-    XtVaGetValues(toplevel,
-	XtNwidth, &toplevel_width,
-	XtNheight, &toplevel_height,
-	XtNx, &toplevel_x,
-	XtNy, &toplevel_y,
-	NULL);
-
-    /* Compute our position relatve to those. */
-    XtVaSetValues(w,
-	XtNx, toplevel_x + (toplevel_width - width) / 2,
-	XtNy, toplevel_y + (toplevel_height - height) / 2,
-	NULL);
-}
-
-static void
-save_file_ascii(void)
-{
-    char *sfn;
-    FILE *f;
-    card *c;
-    int i, j, h;
-
-    XtVaGetValues(save_dialog, XtNvalue, &sfn, NULL);
-    f = fopen(sfn, "w");
-    if (f == NULL) {
-	XBell(display, 100);
-	XtVaSetValues(save_dialog,
-	    XtNlabel, strerror(errno),
-	    NULL);
-	XtVaSetValues(XtNameToWidget(save_dialog, XtNlabel),
-	    XtNforeground, appres.errcolor,
-	    NULL);
-	return;
-    }
-    XtPopdown(save_shell);
-
-    for (c = first_card(); c; c = c->next) {
-	if (c == ccard)
-	    continue;
-	for (i = 0; i < N_COLS; i++) {
-	    if (!c->n_ov[i]) {
-		fputc(' ', f);
-		continue;
-	    }
-	    /* Try to find a single character. */
-	    for (h = 0; h < 256; h++) {
-		if (h == '\n' || h == '\b')
-			continue;
-		if (charset_xlate(ccharset, h) != NS &&
-		    charset_xlate(ccharset, h) == c->holes[i]) {
-		    fputc(h, f);
-		    break;
-		}
-	    }
-	    if (h < 256)
-		continue;
-	    /* Write it with backspaces. */
-	    for (j = 0; j < c->n_ov[i]; j++) {
-		if (j)
-		    fputc('\b', f);
-		fputc(c->coltxt[i][j], f);
-	    }
-	}
-	fputc('\n', f);
-    }
-    fclose(f);
-}
-
-static void
-save_file_image(void)
-{
-    char *sfn;
-    FILE *f;
-    card *c;
-
-    XtVaGetValues(save_dialog, XtNvalue, &sfn, NULL);
-    f = fopen(sfn, "w");
-    if (f == NULL) {
-	XBell(display, 100);
-	XtVaSetValues(save_dialog,
-	    XtNlabel, strerror(errno),
-	    NULL);
-	XtVaSetValues(XtNameToWidget(save_dialog, XtNlabel),
-	    XtNforeground, appres.errcolor,
-	    NULL);
-	return;
-    }
-    XtPopdown(save_shell);
-
-    /* Write the header. */
-    fprintf(f, "H80");
-
-    /* Write the cards. */
-    for (c = first_card(); c; c = c->next) {
-	int i;
-	unsigned char b3[3];
-
-	if (c == ccard)
-	    continue;
-
-	fprintf(f, "%c%c%c",
-	    0x80 | cardimg_type(ccardimg)[0],
-	    0x80 | cardimg_type(ccardimg)[1] |
-		charset_punch_type(ccharset),
-	    0x80 | cardimg_type(ccardimg)[2]);
-	for (i = 0; i < N_COLS; i++) {
-	    if (i % 2) {
-		b3[1] |= (c->holes[i] >> 8) & 0xf;
-		b3[2] = c->holes[i] & 0xff;
-		if (fwrite(b3, 1, 3, f) < 3)
-		    break;
-	    } else {
-		b3[0] = c->holes[i] >> 4;
-		b3[1] = (c->holes[i] & 0xf) << 4;
-	    }
-	}
-    }
-    fclose(f);
-}
-
-static void
-save_ascii_callback(Widget w, XtPointer client_data, XtPointer call_data)
-{
-    save_file_ascii();
-}
-
-static void
-save_image_callback(Widget w, XtPointer client_data, XtPointer call_data)
-{
-    save_file_image();
-}
-
-static void
-cancel_callback(Widget w, XtPointer client_data, XtPointer call_data)
-{
-    XtPopdown(save_shell);
-}
-
-static void
-confirm(Widget w, XEvent *event, String *params, Cardinal *num_params)
-{
-    save_file_ascii();
-}
-
-static void
-save_popup(void)
-{
-    Widget w;
-
-    if (!save_popup_created) {
-	Dimension width, height;
-
-	/* Create the shell. */
-	save_shell = XtVaCreatePopupShell("save",
-	    transientShellWidgetClass, toplevel,
-	    NULL);
-	XtAddCallback(save_shell, XtNpopupCallback, center_it, NULL);
-
-	/* Create the dialog in the popup. */
-	save_dialog = XtVaCreateManagedWidget(
-	    "dialog", dialogWidgetClass,
-	    save_shell,
-	    XtNvalue, "",
-	    XtNbackground, appres.cabinet,
-	    NULL);
-	w = XtNameToWidget(save_dialog, XtNvalue);
-	XtVaSetValues(w,
-	    XtNwidth, 200,
-	    NULL);
-	XtOverrideTranslations(w,
-	    XtParseTranslationTable("<Key>Return: confirm()"));
-	XtVaSetValues(XtNameToWidget(save_dialog, XtNlabel),
-	    XtNwidth, 200,
-	    XtNbackground, appres.cabinet,
-	    NULL);
-	if (appres.cabinet == XBlackPixel(display, default_screen))
-	    XtVaSetValues(XtNameToWidget(save_dialog, XtNlabel),
-		XtNforeground, XWhitePixel(display, default_screen),
-		NULL);
-
-	/* Add 'Save' and 'Cancel' buttons to the dialog. */
-	w = XtVaCreateManagedWidget("Save Ascii", commandWidgetClass,
-	    save_dialog,
-	    NULL);
-	XtAddCallback(w, XtNcallback, save_ascii_callback, NULL);
-	w = XtVaCreateManagedWidget("Save Images", commandWidgetClass,
-	    save_dialog,
-	    NULL);
-	XtAddCallback(w, XtNcallback, save_image_callback, NULL);
-	w = XtVaCreateManagedWidget("Cancel", commandWidgetClass,
-	    save_dialog,
-	    NULL);
-	XtAddCallback(w, XtNcallback, cancel_callback, NULL);
-
-	/* Set the width and height. */
-	XtRealizeWidget(save_shell);
-	XtVaGetValues(save_shell,
-	    XtNwidth, &width,
-	    XtNheight, &height,
-	    NULL);
-	XtVaSetValues(save_shell,
-	    XtNheight, height,
-	    XtNwidth, width,
-	    XtNbaseHeight, height,
-	    XtNbaseWidth, width,
-	    XtNminHeight, height,
-	    XtNminWidth, width,
-	    XtNmaxHeight, height,
-	    XtNmaxWidth, width,
-	    NULL);
-
-	save_popup_created = True;
-    }
-    XtVaSetValues(save_dialog,
-	XtNlabel, "Save File Name",
-	NULL);
-    if (appres.cabinet == XBlackPixel(display, default_screen))
-	XtVaSetValues(XtNameToWidget(save_dialog, XtNlabel), XtNforeground,
-		XWhitePixel(display, default_screen), NULL);
-    else
-	XtVaSetValues(XtNameToWidget(save_dialog, XtNlabel), XtNforeground,
-		appres.foreground, NULL);
-    XtPopup(save_shell, XtGrabExclusive);
-    /*XSetWMProtocols(display, XtWindow(save_shell), &delete_me, 1);*/
-}
-
 /* Batch processing. */
 typedef enum {
     BS_READ,	/* need to read from the file */
@@ -2067,4 +1807,22 @@ batch_fsm(void)
 	}
     } while (eq_first == NULL);
 
+}
+
+Pixel
+get_errcolor(void)
+{
+    return appres.errcolor;
+}
+
+Pixel
+get_cabinet(void)
+{
+    return appres.cabinet;
+}
+
+Pixel
+get_foreground(void)
+{
+    return appres.foreground;
 }
