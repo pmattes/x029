@@ -26,9 +26,12 @@
 #include <X11/Xaw/Porthole.h>
 #include <X11/xpm.h>
 
+#include "x029.h"
+
 #include "jones.h"
 #include "cardimg.h"
 #include "charset.h"
+#include "paste.h"
 
 #include "hole.xpm"		/* hole image */
 #include "off60.xpm"		/* switch, off */
@@ -108,10 +111,11 @@ char *bottom_label3[] = { "DUP", NULL, "SEL", NULL, NULL, NULL, NULL, NULL };
 #define POWER_WIDTH	50
 #define POWER_HEIGHT	40
 
+Display			*display;
+
 static char		*programname;
 static Widget		toplevel;
 static XtAppContext	appcontext;
-static Display		*display;
 static int		default_screen;
 static int		root_window;
 static int		card_window;
@@ -273,7 +277,6 @@ static void release(Widget, XEvent *, String *, Cardinal *);
 static void redraw(Widget, XEvent *, String *, Cardinal *);
 static void right(Widget, XEvent *, String *, Cardinal *);
 static void tab(Widget, XEvent *, String *, Cardinal *);
-static void insert_selection(Widget, XEvent *, String *, Cardinal *);
 static void confirm(Widget, XEvent *, String *, Cardinal *);
 
 /* Xt callbacks. */
@@ -303,7 +306,6 @@ static void startup_power_feed(void);
 static void startup_power(void);
 static void do_feed(void);
 static void save_popup(void);
-static Boolean add_char(char c);
 static void enq_quit(void);
 static void enq_delay(void);
 static void do_release(int delay);
@@ -1333,7 +1335,8 @@ enq_event(enum evtype evtype, unsigned char param, Boolean restricted,
     return True;
 }
 
-static Boolean
+/* Add a character to the current card. This is an external entry point. */
+Boolean
 add_char(char c)
 {
     return enq_event(DATA, c, False, SLOW);
@@ -1649,73 +1652,6 @@ static void
 queued_press_rel(int ignored)
 {
     show_key_down(&rel_key);
-}
-
-#define NP	5
-Atom paste_atom[NP];
-int n_pasting = 0;
-int pix = 0;
-Time paste_time;
-
-/* Pasting support. */
-static void
-paste_callback(Widget w, XtPointer client_data, Atom *selection, Atom *type,
-    XtPointer value, unsigned long *length, int *format)
-{
-    char *s;
-    unsigned long len;
-
-    if ((value == NULL) || (*length == 0)) {
-	XtFree(value);
-
-	/* Try the next one. */
-	if (n_pasting > pix)
-	    XtGetSelectionValue(w, paste_atom[pix++], XA_STRING,
-		    paste_callback, NULL, paste_time);
-	return;
-    }
-
-    s = (char *)value;
-    len = *length;
-    while (len--) {
-	unsigned char c = *s++;
-
-	if (c == '\n')
-	    break;
-	if (c < ' ') {
-	    continue;
-	}
-	if (!enq_event(DATA, c, False, SLOW))
-	    break;
-    }
-    n_pasting = 0;
-
-    XtFree(value);
-}
-
-static void
-insert_selection(Widget w, XEvent *event, String *params, Cardinal *num_params)
-{
-    int	i;
-    Atom a;
-    XButtonEvent *bevent = (XButtonEvent *)event;
-
-    n_pasting = 0;
-    for (i = 0; i < *num_params; i++) {
-	a = XInternAtom(display, params[i], True);
-	if (a == None) {
-	    XtWarning("no atom for selection");
-	    continue;
-	}
-	if (n_pasting < NP)
-	    paste_atom[n_pasting++] = a;
-    }
-    pix = 0;
-    if (n_pasting > pix) {
-	paste_time = bevent->time;
-	XtGetSelectionValue(w, paste_atom[pix++], XA_STRING, paste_callback,
-		NULL, paste_time);
-    }
 }
 
 /* 'Save' pop-up. */
