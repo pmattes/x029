@@ -156,21 +156,21 @@ static void key_init(kpkey_t *key, const char *name, Widget container, int x,
 	key_backend_t backend);
 
 /* Internal actions. */
-static void do_nothing(int);
-static void do_data(int);
-static void do_multipunch(int);
-static void do_left(int);
-static void do_kybd_right(int);
-static void do_rel_right(int);
-static void do_home(int);
-static void do_pan_right(int);
-static void do_pan_left(int);
-static void do_pan_up(int);
-static void do_slam(int);
-static void do_newcard(int);
-static void do_power_on(int);
-static void do_press_feed(int);
-static void do_press_rel(int);
+static void queued_nothing(int);
+static void queued_data(int);
+static void queued_multipunch(int);
+static void queued_left(int);
+static void queued_kybd_right(int);
+static void queued_rel_right(int);
+static void queued_home(int);
+static void queued_pan_right(int);
+static void queued_pan_left(int);
+static void queued_pan_up(int);
+static void queued_slam(int);
+static void queued_newcard(int);
+static void queued_power_on(int);
+static void queued_press_feed(int);
+static void queued_press_rel(int);
 
 /* Application resources. */
 typedef struct {
@@ -299,7 +299,7 @@ static Boolean card_in_punch_station = False;
 
 /* Forward references. */
 static void define_widgets(void);
-static void startup_feed(void);
+static void startup_power_feed(void);
 static void startup_power(void);
 static void do_feed(void);
 static void save_popup(void);
@@ -457,7 +457,7 @@ main(int argc, char *argv[])
     }
 
     if (mode == M_INTERACTIVE || mode == M_REMOTECTL) {
-	startup_feed();
+	startup_power_feed();
     } else {
 	startup_power();
     }
@@ -920,7 +920,7 @@ set_posw(int c)
 
 /* Go to the next card. */
 static void
-do_newcard(int replace)
+queued_newcard(int replace)
 {
     int i;
 
@@ -1057,24 +1057,24 @@ save_key_backend(kpkey_t *key)
  */
 
 static void
-do_nothing(int ignored)
+queued_nothing(int ignored)
 {
 }
 
 static void
-do_data(int c)
+queued_data(int c)
 {
     if (card_in_punch_station && col < N_COLS && punch_char(col, c)) {
 	draw_col(col);
 #if defined(SOUND) /*[*/
 	loud_click();
 #endif /*]*/
-	do_kybd_right(0);
+	queued_kybd_right(0);
     }
 }
 
 static void
-do_multipunch(int c)
+queued_multipunch(int c)
 {
     if (col < N_COLS && punch_char(col, c)) {
 	draw_col(col);
@@ -1085,19 +1085,19 @@ do_multipunch(int c)
 }
 
 static void
-do_left(int c)
+queued_left(int c)
 {
     if (col) {
-	do_pan_left(0);
+	queued_pan_left(0);
 	set_posw(col - 1);
     }
 }
 
 static void
-do_kybd_right(int do_click)
+queued_kybd_right(int do_click)
 {
     if (col < N_COLS) {
-	do_pan_right(do_click);
+	queued_pan_right(do_click);
 	set_posw(col + 1);
 
 	/* Do auto-feed. */
@@ -1112,16 +1112,16 @@ do_kybd_right(int do_click)
 }
 
 static void
-do_rel_right(int do_click)
+queued_rel_right(int do_click)
 {
     if (col < N_COLS) {
-	do_pan_right(do_click);
+	queued_pan_right(do_click);
 	set_posw(col + 1);
     }
 }
 
 static void
-do_pan_left(int ignored)
+queued_pan_left(int ignored)
 {
     scrollw_column--;
     XtVaSetValues(scrollw, XtNx, SCROLLW_X(), NULL);
@@ -1131,7 +1131,7 @@ do_pan_left(int ignored)
 }
 
 static void
-do_pan_right(int do_click)
+queued_pan_right(int do_click)
 {
     scrollw_column++;
     XtVaSetValues(scrollw, XtNx, SCROLLW_X(), NULL);
@@ -1142,7 +1142,7 @@ do_pan_right(int do_click)
 }
 
 static void
-do_pan_up(int ignored)
+queued_pan_up(int ignored)
 {
     Dimension y;
 
@@ -1152,14 +1152,14 @@ do_pan_up(int ignored)
 }
 
 static void
-do_home(int ignored)
+queued_home(int ignored)
 {
-    do_pan_left(0);
+    queued_pan_left(0);
     set_posw(col - 1);
 }
 
 static void
-do_slam(int ignored)
+queued_slam(int ignored)
 {
     scrollw_column = SLAM_COL;
     XtVaSetValues(scrollw,
@@ -1169,20 +1169,20 @@ do_slam(int ignored)
 }
 
 static void
-do_quit(int ignored)
+queued_quit(int ignored)
 {
     exit(0);
 }
 
 static void
-do_invisible(int ignored)
+queued_invisible(int ignored)
 {
     card_in_punch_station = False;
     XtVaSetValues(posw, XtNlabel, "-", NULL);
 }
 
 static void
-do_visible(int ignored)
+queued_visible(int ignored)
 {
     card_in_punch_station = True;
     set_posw(0);
@@ -1195,24 +1195,24 @@ enum evtype { DUMMY, DATA, MULTI, LEFT, KYBD_RIGHT, HOME,
 	      PAN_RIGHT, PAN_LEFT, PAN_UP, SLAM, NEWCARD, QUIT,
 	      INVISIBLE, VISIBLE, REL_RIGHT, POWER_ON, PRESS_FEED, PRESS_REL };
 void (*eq_fn[])(int) = {
-    do_nothing,
-    do_data,
-    do_multipunch,
-    do_left,
-    do_kybd_right,
-    do_home,
-    do_pan_right,
-    do_pan_left,
-    do_pan_up,
-    do_slam,
-    do_newcard,
-    do_quit,
-    do_invisible,
-    do_visible,
-    do_rel_right,
-    do_power_on,
-    do_press_feed,
-    do_press_rel,
+    queued_nothing,
+    queued_data,
+    queued_multipunch,
+    queued_left,
+    queued_kybd_right,
+    queued_home,
+    queued_pan_right,
+    queued_pan_left,
+    queued_pan_up,
+    queued_slam,
+    queued_newcard,
+    queued_quit,
+    queued_invisible,
+    queued_visible,
+    queued_rel_right,
+    queued_power_on,
+    queued_press_feed,
+    queued_press_rel,
 };
 char *eq_name[] = {
     "DUMMY", "DATA", "MULTI", "LEFT", "KYBD_RIGHT", "HOME", "PAN_RIGHT",
@@ -1618,21 +1618,21 @@ do_feed(void)
     enq_event(VISIBLE, 0, False, 0);
 }
 
-/* Interactive start-up sequence. */
+/* Start-up sequence. */
 static void
-do_power_on(int ignored)
+queued_power_on(int ignored)
 {
     XtVaSetValues(power_widget, XtNbackgroundPixmap, red_on, NULL);
 }
 
 static void
-do_press_feed(int ignored)
+queued_press_feed(int ignored)
 {
     show_key_down(&feed_key);
 }
 
 static void
-startup_feed(void)
+startup_power_feed(void)
 {
     enq_event(POWER_ON, 0, False, VERY_SLOW);
     enq_event(PRESS_FEED, 0, False, VERY_SLOW);
@@ -1646,7 +1646,7 @@ startup_power(void)
 }
 
 static void
-do_press_rel(int ignored)
+queued_press_rel(int ignored)
 {
     show_key_down(&rel_key);
 }
