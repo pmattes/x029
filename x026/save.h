@@ -13,7 +13,7 @@
 # define SAVE_H 1
 
 extern void save_popup(void);
-extern void confirm(Widget w, XEvent *event, String *params,
+extern void confirm_action(Widget w, XEvent *event, String *params,
 	Cardinal *num_params);
 
 #endif /*]*/

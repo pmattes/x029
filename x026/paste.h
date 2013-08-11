@@ -12,6 +12,6 @@
 #if !defined(PASTE_H) /*[*/
 # define PASTE_H 1
 
-extern void insert_selection(Widget, XEvent *, String *, Cardinal *);
+extern void insert_selection_action(Widget, XEvent *, String *, Cardinal *);
 
 #endif /*]*/

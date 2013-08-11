@@ -73,7 +73,8 @@ paste_callback(Widget w, XtPointer client_data, Atom *selection, Atom *type,
 }
 
 void
-insert_selection(Widget w, XEvent *event, String *params, Cardinal *num_params)
+insert_selection_action(Widget w, XEvent *event, String *params,
+	Cardinal *num_params)
 {
     int	i;
     Atom a;

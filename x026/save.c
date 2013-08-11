@@ -185,7 +185,7 @@ cancel_callback(Widget w, XtPointer client_data, XtPointer call_data)
 }
 
 void
-confirm(Widget w, XEvent *event, String *params, Cardinal *num_params)
+confirm_action(Widget w, XEvent *event, String *params, Cardinal *num_params)
 {
     save_file_ascii();
 }

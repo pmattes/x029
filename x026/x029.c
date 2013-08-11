@@ -266,35 +266,36 @@ static String fallbacks[] = {
 };
 
 /* Xt actions. */
-static void data(Widget, XEvent *, String *, Cardinal *);
-static void multi_punch_data(Widget, XEvent *, String *, Cardinal *);
-static void delete_window(Widget, XEvent *, String *, Cardinal *);
-static void home(Widget, XEvent *, String *, Cardinal *);
-static void left(Widget, XEvent *, String *, Cardinal *);
-static void release(Widget, XEvent *, String *, Cardinal *);
-static void redraw(Widget, XEvent *, String *, Cardinal *);
-static void right(Widget, XEvent *, String *, Cardinal *);
-static void tab(Widget, XEvent *, String *, Cardinal *);
+static void data_action(Widget, XEvent *, String *, Cardinal *);
+static void multi_punch_data_action(Widget, XEvent *, String *, Cardinal *);
+static void delete_window_action(Widget, XEvent *, String *, Cardinal *);
+static void home_action(Widget, XEvent *, String *, Cardinal *);
+static void left_action(Widget, XEvent *, String *, Cardinal *);
+static void release_actione(Widget, XEvent *, String *, Cardinal *);
+static void redraw_action(Widget, XEvent *, String *, Cardinal *);
+static void right_action(Widget, XEvent *, String *, Cardinal *);
+static void tab_action(Widget, XEvent *, String *, Cardinal *);
 
 /* Xt callbacks. */
 static void key_press(Widget, XtPointer, XtPointer);
 
 /* Actions. */
 static XtActionsRec actions[] = {
-    { "Data",	data },
-    { "MultiPunchData", multi_punch_data },
-    { "DeleteWindow", delete_window },
-    { "Home",	home },
-    { "Left",	left },
-    { "Release",	release },
-    { "Redraw",	redraw },
-    { "Right",	right },
-    { "Tab",	tab },
-    { "insert-selection", insert_selection },
-    { "confirm",	confirm }
+    { "Data",		data_action },
+    { "MultiPunchData", multi_punch_data_action },
+    { "DeleteWindow",	delete_window_action },
+    { "Home",		home_action },
+    { "Left",		left_action },
+    { "Release",	release_actione },
+    { "Redraw",		redraw_action },
+    { "Right",		right_action },
+    { "Tab",		tab_action },
+    { "insert-selection", insert_selection_action },
+    { "confirm",	confirm_action }
 };
 static int actioncount = XtNumber(actions);
 
+static Boolean power_on = False;
 static Boolean card_in_punch_station = False;
 
 /* Forward references. */
@@ -302,7 +303,6 @@ static void define_widgets(void);
 static void startup_power_feed(void);
 static void startup_power(void);
 static void do_feed(Boolean keep_sequence);
-static void enq_quit(void);
 static void enq_delay(void);
 static void do_release(int delay);
 static void batch_fsm(void);
@@ -467,17 +467,24 @@ main(int argc, char *argv[])
 }
 
 static void
-power_off(XtPointer data, XtIntervalId *id)
+power_off_timeout(XtPointer data, XtIntervalId *id)
 {
     exit(0);
+}
+
+static void
+do_power_off(void)
+{
+    power_on = False;
+    XtVaSetValues(power_widget, XtNbackgroundPixmap, red_off, NULL);
+    (void) XtAppAddTimeOut(appcontext, VERY_SLOW * 2, power_off_timeout, NULL);
 }
 
 /* Callback for power button. */
 static void
 power_callback(Widget w, XtPointer client_data, XtPointer call_data)
 {
-    XtVaSetValues(power_widget, XtNbackgroundPixmap, red_off, NULL);
-    (void) XtAppAddTimeOut(appcontext, VERY_SLOW * 2, power_off, NULL);
+    do_power_off();
 }
 
 /* Definitions for the toggle switches. */
@@ -941,7 +948,8 @@ queued_newcard(int replace)
 
 /* Redraw the entire card image. */
 static void
-redraw(Widget wid, XEvent  *event, String  *params, Cardinal *num_params)
+redraw_action(Widget wid, XEvent  *event, String  *params,
+	Cardinal *num_params)
 {
     int i;
     Dimension x, y, w, h;
@@ -1014,7 +1022,8 @@ redraw(Widget wid, XEvent  *event, String  *params, Cardinal *num_params)
 
 /* Exit. */
 static void
-delete_window(Widget wid, XEvent *event, String *params, Cardinal *num_params)
+delete_window_action(Widget wid, XEvent *event, String *params,
+	Cardinal *num_params)
 {
     exit(0);
 }
@@ -1166,12 +1175,6 @@ queued_slam(int ignored)
 }
 
 static void
-queued_quit(int ignored)
-{
-    exit(0);
-}
-
-static void
 queued_invisible(int ignored)
 {
     card_in_punch_station = False;
@@ -1189,7 +1192,7 @@ queued_visible(int ignored)
  * Event queueing: Inserting artificial delays in processing certain events.
  */
 enum evtype { DUMMY, DATA, MULTI, LEFT, KYBD_RIGHT, HOME,
-	      PAN_RIGHT, PAN_LEFT, PAN_UP, SLAM, NEWCARD, QUIT,
+	      PAN_RIGHT, PAN_LEFT, PAN_UP, SLAM, NEWCARD,
 	      INVISIBLE, VISIBLE, REL_RIGHT, POWER_ON, PRESS_FEED, PRESS_REL };
 void (*eq_fn[])(int) = {
     queued_nothing,
@@ -1203,7 +1206,6 @@ void (*eq_fn[])(int) = {
     queued_pan_up,
     queued_slam,
     queued_newcard,
-    queued_quit,
     queued_invisible,
     queued_visible,
     queued_rel_right,
@@ -1213,7 +1215,7 @@ void (*eq_fn[])(int) = {
 };
 char *eq_name[] = {
     "DUMMY", "DATA", "MULTI", "LEFT", "KYBD_RIGHT", "HOME", "PAN_RIGHT",
-    "PAN_LEFT", "PAN_UP", "SLAM", "NEWCARD", "QUIT", "INVISIBLE", "VISIBLE",
+    "PAN_LEFT", "PAN_UP", "SLAM", "NEWCARD", "INVISIBLE", "VISIBLE",
     "REL_RIGHT", "POWER_ON", "PRESS_FEED", "PRESS_REL"
 };
 typedef struct event {
@@ -1338,12 +1340,6 @@ add_char(char c)
 }
 
 static void
-enq_quit(void)
-{
-    (void) enq_event(QUIT, 0, False, SLOW * 2);
-}
-
-static void
 enq_delay(void)
 {
     (void) enq_event(DUMMY, 0, False, VERY_SLOW);
@@ -1354,7 +1350,7 @@ enq_delay(void)
  */
 
 static void
-data(Widget wid, XEvent *event, String *params, Cardinal *num_params)
+data_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
     XKeyEvent *kevent = (XKeyEvent *)event;
     char buf[10];
@@ -1369,7 +1365,7 @@ data(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 }
 
 static void
-multi_punch_data(Widget wid, XEvent *event, String *params,
+multi_punch_data_action(Widget wid, XEvent *event, String *params,
 	Cardinal *num_params)
 {
     XKeyEvent *kevent = (XKeyEvent *)event;
@@ -1385,21 +1381,21 @@ multi_punch_data(Widget wid, XEvent *event, String *params,
 }
 
 static void
-left(Widget wid, XEvent *event, String *params, Cardinal *num_params)
+left_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
     if (card_in_punch_station)
 	enq_event(LEFT, 0, !appres.typeahead, SLOW);
 }
 
 static void
-right(Widget wid, XEvent *event, String *params, Cardinal *num_params)
+right_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
     if (card_in_punch_station)
 	enq_event(KYBD_RIGHT, 1, !appres.typeahead, SLOW);
 }
 
 static void
-home(Widget wid, XEvent *event, String *params, Cardinal *num_params)
+home_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
     int i;
 
@@ -1432,14 +1428,15 @@ rel_key_backend(kpkey_t *key)
 }
 
 static void
-release(Widget wid, XEvent *event, String *params, Cardinal *num_params)
+release_actione(Widget wid, XEvent *event, String *params,
+	Cardinal *num_params)
 {
     show_key_down(&rel_key);
     rel_key_backend(&rel_key);
 }
 
 static void
-tab(Widget wid, XEvent *event, String *params, Cardinal *num_params)
+tab_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
     int i;
 
@@ -1612,6 +1609,7 @@ do_feed(Boolean keep_sequence)
 static void
 queued_power_on(int ignored)
 {
+    power_on = True;
     XtVaSetValues(power_widget, XtNbackgroundPixmap, red_on, NULL);
 }
 
@@ -1802,12 +1800,10 @@ batch_fsm(void)
 
 	case BS_EOF:
 	    /* Done. */
-	    XtVaSetValues(power_widget, XtNbackgroundPixmap,
-		    red_off, NULL);
-	    enq_quit();
+	    do_power_off();
 	    break;
 	}
-    } while (eq_first == NULL);
+    } while (eq_first == NULL && power_on);
 
 }
 
