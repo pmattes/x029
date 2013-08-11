@@ -301,7 +301,7 @@ static Boolean card_in_punch_station = False;
 static void define_widgets(void);
 static void startup_power_feed(void);
 static void startup_power(void);
-static void do_feed(void);
+static void do_feed(Boolean keep_sequence);
 static void enq_quit(void);
 static void enq_delay(void);
 static void do_release(int delay);
@@ -1103,7 +1103,7 @@ queued_kybd_right(int do_click)
 	    col == N_COLS) {
 
 	    do_release(VERY_FAST);
-	    do_feed();
+	    do_feed(False);
 	}
     }
 }
@@ -1427,7 +1427,7 @@ rel_key_backend(kpkey_t *key)
     if (card_in_punch_station) {
 	do_release(VERY_FAST);
 	if (toggles[T_AUTO_FEED].on)
-	    do_feed();
+	    do_feed(False);
     }
 }
 
@@ -1465,28 +1465,20 @@ drop_key_backend(kpkey_t *key)
     if (!enq_event(DUMMY, 0, True, SLOW))
 	return;
 
+    card_in_punch_station = False;
+
     /* Scroll the previous card away. */
     if (ccard) {
 	for (i = 0; i <= col; i++)
 	    enq_event(LEFT, 0, False, FAST);
 	enq_event(INVISIBLE, 0, False, 0);
-	for (i = 0; i < N_COLS/2; i++)
+	for (i = 0; i < N_COLS/2 + 3; i++)
 	    enq_event(PAN_LEFT, 0, False, FAST);
     }
 
-    card_in_punch_station = False;
-
-    enq_event(NEWCARD, True, False, FAST);
-
-    /* Scroll the new card down. */
-    enq_event(SLAM, 0, False, SLOW);
-    for (i = 0; i <= N_ROWS; i++) {
-	enq_event(PAN_UP, 0, False, FAST);
+    if (toggles[T_AUTO_FEED].on) {
+	do_feed(True);
     }
-    for (i = SLAM_COL; i < SLAM_TARGET_COL; i++) {
-	enq_event(PAN_RIGHT, 0, False, VERY_FAST);
-    }
-    enq_event(VISIBLE, 0, False, 0);
 }
 
 /* Feed a new card. */
@@ -1494,7 +1486,7 @@ static void
 feed_key_backend(kpkey_t *key)
 {
     if (!eq_count && !card_in_punch_station) {
-	do_feed();
+	do_feed(False);
     }
 }
 
@@ -1599,11 +1591,11 @@ do_release(int delay)
 
 /* Pull a card from the (infinite) hopper into the punch station. */
 static void
-do_feed(void)
+do_feed(Boolean keep_sequence)
 {
     int i;
 
-    enq_event(NEWCARD, False, False, FAST);
+    enq_event(NEWCARD, keep_sequence, False, FAST);
 
     /* Scroll the new card down. */
     enq_event(SLAM, 0, False, SLOW);
@@ -1634,7 +1626,7 @@ startup_power_feed(void)
 {
     enq_event(POWER_ON, 0, False, VERY_SLOW);
     enq_event(PRESS_FEED, 0, False, VERY_SLOW);
-    do_feed();
+    do_feed(False);
 }
 
 static void
@@ -1739,7 +1731,7 @@ batch_fsm(void)
 		    unfed = False;
 		    show_key_down(&feed_key);
 		}
-		do_feed();
+		do_feed(False);
 		if (mode == M_BATCH) {
 		    enq_delay();
 		}
@@ -1797,7 +1789,7 @@ batch_fsm(void)
 		 * doing it.
 		 */
 		if (mode == M_REMOTECTL) {
-		    do_feed();
+		    do_feed(False);
 		}
 
 		bs = BS_READ;
