@@ -160,7 +160,7 @@ static void key_init(kpkey_t *key, const char *name, Widget container, int x,
 	int y, char *normal_pixmap_src[], char *pressed_pixmap_src[],
 	key_backend_t backend);
 
-/* Internal actions. */
+/* Queued actions (queued_xxx). */
 static void queued_nothing(int);
 static void queued_data(int);
 static void queued_multipunch(int);
@@ -265,13 +265,13 @@ static String fallbacks[] = {
     NULL
 };
 
-/* Xt actions. */
+/* Xt actions (xxx_action). */
 static void data_action(Widget, XEvent *, String *, Cardinal *);
 static void multi_punch_data_action(Widget, XEvent *, String *, Cardinal *);
 static void delete_window_action(Widget, XEvent *, String *, Cardinal *);
 static void home_action(Widget, XEvent *, String *, Cardinal *);
 static void left_action(Widget, XEvent *, String *, Cardinal *);
-static void release_actione(Widget, XEvent *, String *, Cardinal *);
+static void release_action(Widget, XEvent *, String *, Cardinal *);
 static void redraw_action(Widget, XEvent *, String *, Cardinal *);
 static void right_action(Widget, XEvent *, String *, Cardinal *);
 static void tab_action(Widget, XEvent *, String *, Cardinal *);
@@ -286,7 +286,7 @@ static XtActionsRec actions[] = {
     { "DeleteWindow",	delete_window_action },
     { "Home",		home_action },
     { "Left",		left_action },
-    { "Release",	release_actione },
+    { "Release",	release_action },
     { "Redraw",		redraw_action },
     { "Right",		right_action },
     { "Tab",		tab_action },
@@ -298,6 +298,12 @@ static int actioncount = XtNumber(actions);
 static Boolean power_on = False;
 static Boolean card_in_punch_station = False;
 
+/* Key press back-ends (xxx_backend). */
+static void save_key_backend(kpkey_t *key);
+static void drop_key_backend(kpkey_t *key);
+static void rel_key_backend(kpkey_t *);
+static void feed_key_backend(kpkey_t *);
+
 /* Forward references. */
 static void define_widgets(void);
 static void startup_power_feed(void);
@@ -306,10 +312,6 @@ static void do_feed(Boolean keep_sequence);
 static void enq_delay(void);
 static void do_release(int delay);
 static void batch_fsm(void);
-static void save_key_backend(kpkey_t *key);
-static void drop_key_backend(kpkey_t *key);
-static void rel_key_backend(kpkey_t *);
-static void feed_key_backend(kpkey_t *);
 
 /* Syntax. */
 void
@@ -1055,7 +1057,9 @@ next_card(card_t *c)
 static void
 save_key_backend(kpkey_t *key)
 {
-    save_popup();
+    if (power_on) {
+	save_popup();
+    }
 }
 
 /*
@@ -1357,10 +1361,13 @@ data_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
     KeySym ks;
     int ll;
 
+    if (!power_on || !card_in_punch_station) {
+	return;
+    }
+
     ll = XLookupString(kevent, buf, 10, &ks, (XComposeStatus *)NULL);
     if (ll == 1) {
-	if (card_in_punch_station)
-	    enq_event(DATA, buf[0] & 0xff, !appres.typeahead, SLOW);
+	enq_event(DATA, buf[0] & 0xff, !appres.typeahead, SLOW);
     }
 }
 
@@ -1373,6 +1380,10 @@ multi_punch_data_action(Widget wid, XEvent *event, String *params,
     KeySym ks;
     int ll;
 
+    if (!power_on || !card_in_punch_station) {
+	return;
+    }
+
     ll = XLookupString(kevent, buf, 10, &ks, (XComposeStatus *)NULL);
     if (ll == 1) {
 	if (card_in_punch_station)
@@ -1383,15 +1394,17 @@ multi_punch_data_action(Widget wid, XEvent *event, String *params,
 static void
 left_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
-    if (card_in_punch_station)
+    if (power_on && card_in_punch_station) {
 	enq_event(LEFT, 0, !appres.typeahead, SLOW);
+    }
 }
 
 static void
 right_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
-    if (card_in_punch_station)
+    if (power_on && card_in_punch_station) {
 	enq_event(KYBD_RIGHT, 1, !appres.typeahead, SLOW);
+    }
 }
 
 static void
@@ -1399,8 +1412,8 @@ home_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
     int i;
 
-    if (card_in_punch_station) {
-	if (!enq_event(DUMMY, 0, True, SLOW))
+    if (power_on && card_in_punch_station) {
+	if (!enq_event(DUMMY, 0, !appres.typeahead, SLOW))
 	    return;
 
 	for (i = 0; i < col; i++) {
@@ -1420,7 +1433,7 @@ rel_key_backend(kpkey_t *key)
 	printf("release(%s)\n", card_in_punch_station? "card": "no card");
     }
 
-    if (card_in_punch_station) {
+    if (power_on && card_in_punch_station) {
 	do_release(VERY_FAST);
 	if (toggles[T_AUTO_FEED].on)
 	    do_feed(False);
@@ -1428,9 +1441,11 @@ rel_key_backend(kpkey_t *key)
 }
 
 static void
-release_actione(Widget wid, XEvent *event, String *params,
-	Cardinal *num_params)
+release_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
+    if (!power_on) {
+	return;
+    }
     show_key_down(&rel_key);
     rel_key_backend(&rel_key);
 }
@@ -1440,7 +1455,7 @@ tab_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
     int i;
 
-    if (card_in_punch_station) {
+    if (power_on && card_in_punch_station) {
 	if (!enq_event(DUMMY, 0, True, SLOW))
 	    return;
 
@@ -1456,8 +1471,9 @@ drop_key_backend(kpkey_t *key)
 {
     int i;
 
-    if (!card_in_punch_station)
+    if (!power_on || !card_in_punch_station) {
 	return;
+    }
 
     if (!enq_event(DUMMY, 0, True, SLOW))
 	return;
@@ -1482,7 +1498,7 @@ drop_key_backend(kpkey_t *key)
 static void
 feed_key_backend(kpkey_t *key)
 {
-    if (!eq_count && !card_in_punch_station) {
+    if (power_on && !eq_count && !card_in_punch_station) {
 	do_feed(False);
     }
 }
