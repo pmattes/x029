@@ -70,7 +70,7 @@ save_file_ascii(void)
 {
     char *sfn;
     FILE *f;
-    card *c;
+    card_t *c;
     int i, j, h;
 
     XtVaGetValues(save_dialog, XtNvalue, &sfn, NULL);
@@ -87,9 +87,7 @@ save_file_ascii(void)
     }
     XtPopdown(save_shell);
 
-    for (c = first_card(); c; c = c->next) {
-	if (c == ccard)
-	    continue;
+    for (c = first_card(); c; c = next_card(c)) {
 	for (i = 0; i < N_COLS; i++) {
 	    if (!c->n_ov[i]) {
 		fputc(' ', f);
@@ -124,7 +122,7 @@ save_file_image(void)
 {
     char *sfn;
     FILE *f;
-    card *c;
+    card_t *c;
 
     XtVaGetValues(save_dialog, XtNvalue, &sfn, NULL);
     f = fopen(sfn, "w");
@@ -144,12 +142,9 @@ save_file_image(void)
     fprintf(f, "H80");
 
     /* Write the cards. */
-    for (c = first_card(); c; c = c->next) {
+    for (c = first_card(); c; c = next_card(c)) {
 	int i;
 	unsigned char b3[3];
-
-	if (c == ccard)
-	    continue;
 
 	fprintf(f, "%c%c%c",
 	    0x80 | cardimg_type(ccardimg)[0],

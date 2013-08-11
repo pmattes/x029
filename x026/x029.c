@@ -521,7 +521,7 @@ toggle_callback(Widget w, XtPointer client_data, XtPointer call_data)
 }
 
 /* Card-image data structures. */
-card *ccard;
+static card_t *ccard;
 static int col = 0;
 static GC gc, invgc, holegc, corner_gc;
 
@@ -912,9 +912,9 @@ queued_newcard(int replace)
 	replace = True;
 
     if (!ccard || !replace) {
-	card *c;
+	card_t *c;
 
-	c = (card *)XtMalloc(sizeof(card));
+	c = (card_t *)XtMalloc(sizeof(card_t));
 	c->prev = ccard;
 	c->next = NULL;
 	if (ccard)
@@ -1020,14 +1020,27 @@ delete_window(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 }
 
 /* Find the first card in the deck. This is an external entry point. */
-card *
+card_t *
 first_card(void)
 {
-    card *c;
+    card_t *c;
 
     for (c = ccard; c && c->prev; c = c->prev) {
     }
     return c;
+}
+
+/* Return the next card, skipping the one in the punch station. */
+card_t *
+next_card(card_t *c)
+{
+    card_t *n;
+
+    n = c->next;
+    if (card_in_punch_station && n == ccard) {
+	return NULL;
+    }
+    return n;
 }
 
 static void

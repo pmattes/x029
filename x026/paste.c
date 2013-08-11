@@ -26,9 +26,6 @@
 #include <X11/Xaw/Porthole.h>
 #include <X11/xpm.h>
 
-#include "jones.h"
-#include "charset.h"
-#include "cardimg.h"
 #include "x029.h"
 #include "paste.h"
 
