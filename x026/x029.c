@@ -176,6 +176,7 @@ static void queued_newcard(int);
 static void queued_power_on(int);
 static void queued_press_feed(int);
 static void queued_press_rel(int);
+static void queued_empty(int);
 
 /* Application resources. */
 typedef struct {
@@ -296,7 +297,12 @@ static XtActionsRec actions[] = {
 static int actioncount = XtNumber(actions);
 
 static Boolean power_on = False;
-static Boolean card_in_punch_station = False;
+static enum {
+    C_EMPTY,	/* No card in punch station, no operation pending */
+    C_FLUX,	/* Operation in progress (in or out) */
+    C_PUNCH	/* Card in punch station */
+} card_state = C_EMPTY;
+#define card_in_punch_station	(card_state == C_PUNCH)
 
 /* Key press back-ends (xxx_backend). */
 static void save_key_backend(kpkey_t *key);
@@ -491,7 +497,7 @@ power_callback(Widget w, XtPointer client_data, XtPointer call_data)
 
 /* Definitions for the toggle switches. */
 
-static Pixmap on, off;
+static Pixmap toggle_on, toggle_off;
 
 struct toggle {
     Widget w;
@@ -504,7 +510,7 @@ static void
 unclear_event(XtPointer data, XtIntervalId *id)
 {
     toggles[T_CLEAR].on = 0;
-    XtVaSetValues(toggles[T_CLEAR].w, XtNbackgroundPixmap, off, NULL);
+    XtVaSetValues(toggles[T_CLEAR].w, XtNbackgroundPixmap, toggle_off, NULL);
 }
 
 /* Callback function for toggle switches. */
@@ -515,7 +521,7 @@ toggle_callback(Widget w, XtPointer client_data, XtPointer call_data)
 
     if (t != &toggles[T_CLEAR]) {
 	t->on = !t->on;
-	XtVaSetValues(w, XtNbackgroundPixmap, t->on? on: off, NULL);
+	XtVaSetValues(w, XtNbackgroundPixmap, t->on? toggle_on: toggle_off, NULL);
 	return;
     }
 
@@ -523,7 +529,7 @@ toggle_callback(Widget w, XtPointer client_data, XtPointer call_data)
     if (t->on)
 	return;
     t->on = !t->on;
-    XtVaSetValues(w, XtNbackgroundPixmap, t->on? on: off, NULL);
+    XtVaSetValues(w, XtNbackgroundPixmap, t->on? toggle_on: toggle_off, NULL);
     (void) XtAppAddTimeOut(appcontext, SLOW * 6, unclear_event, NULL);
     if (card_in_punch_station)
 	do_release(VERY_FAST);
@@ -714,11 +720,11 @@ define_widgets(void)
 
     /* Add the switches. */
     if (XpmCreatePixmapFromData(display, XtWindow(container), off60_xpm,
-		    &off, &shapemask, &attributes) != XpmSuccess) {
+		    &toggle_off, &shapemask, &attributes) != XpmSuccess) {
 	    XtError("XpmCreatePixmapFromData failed");
     }
     if (XpmCreatePixmapFromData(display, XtWindow(container), on60_xpm,
-		    &on, &shapemask, &attributes) != XpmSuccess) {
+		    &toggle_on, &shapemask, &attributes) != XpmSuccess) {
 	    XtError("XpmCreatePixmapFromData failed");
     }
     sx = (w - 8*SWITCH_WIDTH - 7*BUTTON_GAP) / 2;
@@ -734,7 +740,7 @@ define_widgets(void)
 	    XtNheight, SWITCH_HEIGHT,
 	    XtNborderWidth, 0,
 	    XtNlabel, "",
-	    XtNbackgroundPixmap, toggles[i].on? on: off,
+	    XtNbackgroundPixmap, toggles[i].on? toggle_on: toggle_off,
 	    XtNhighlightThickness, 0,
 	    NULL);
 	XtAddCallback(toggles[i].w, XtNcallback, toggle_callback,
@@ -1181,14 +1187,14 @@ queued_slam(int ignored)
 static void
 queued_invisible(int ignored)
 {
-    card_in_punch_station = False;
+    card_state = C_FLUX;
     XtVaSetValues(posw, XtNlabel, "-", NULL);
 }
 
 static void
 queued_visible(int ignored)
 {
-    card_in_punch_station = True;
+    card_state = C_PUNCH;
     set_posw(0);
 }
 
@@ -1197,7 +1203,9 @@ queued_visible(int ignored)
  */
 enum evtype { DUMMY, DATA, MULTI, LEFT, KYBD_RIGHT, HOME,
 	      PAN_RIGHT, PAN_LEFT, PAN_UP, SLAM, NEWCARD,
-	      INVISIBLE, VISIBLE, REL_RIGHT, POWER_ON, PRESS_FEED, PRESS_REL };
+	      INVISIBLE, VISIBLE, REL_RIGHT, POWER_ON, PRESS_FEED, PRESS_REL,
+	      EMPTY
+};
 void (*eq_fn[])(int) = {
     queued_nothing,
     queued_data,
@@ -1216,11 +1224,12 @@ void (*eq_fn[])(int) = {
     queued_power_on,
     queued_press_feed,
     queued_press_rel,
+    queued_empty,
 };
 char *eq_name[] = {
     "DUMMY", "DATA", "MULTI", "LEFT", "KYBD_RIGHT", "HOME", "PAN_RIGHT",
     "PAN_LEFT", "PAN_UP", "SLAM", "NEWCARD", "INVISIBLE", "VISIBLE",
-    "REL_RIGHT", "POWER_ON", "PRESS_FEED", "PRESS_REL"
+    "REL_RIGHT", "POWER_ON", "PRESS_FEED", "PRESS_REL", "EMPTY"
 };
 typedef struct event {
     struct event *next;
@@ -1283,6 +1292,7 @@ deq_event(XtPointer data, XtIntervalId *id)
     eq_first = e->next;
     if (eq_first == NULL)
 	eq_last = NULL;
+    --eq_count;
 
     /* Run it. */
     if (appres.debug)
@@ -1297,10 +1307,16 @@ deq_event(XtPointer data, XtIntervalId *id)
      * If there are more events, schedule the next one.
      * Otherwise, see if the batch FSM needs cranking.
      */
-    if (--eq_count) {
+    if (eq_count) {
+	if (appres.debug)
+	    printf("TimeOut(%d)\n", eq_first->delay);
 	(void) XtAppAddTimeOut(appcontext, eq_first->delay, deq_event, NULL);
-    } else if (mode != M_INTERACTIVE) {
-	batch_fsm();
+    } else {
+	if (appres.debug)
+	    printf("No TimeOut\n");
+	if (mode != M_INTERACTIVE) {
+	    batch_fsm();
+	}
     }
 }
 
@@ -1386,8 +1402,7 @@ multi_punch_data_action(Widget wid, XEvent *event, String *params,
 
     ll = XLookupString(kevent, buf, 10, &ks, (XComposeStatus *)NULL);
     if (ll == 1) {
-	if (card_in_punch_station)
-	    enq_event(MULTI, buf[0], !appres.typeahead, SLOW);
+	enq_event(MULTI, buf[0], !appres.typeahead, SLOW);
     }
 }
 
@@ -1430,7 +1445,8 @@ static void
 rel_key_backend(kpkey_t *key)
 {
     if (appres.debug) {
-	printf("release(%s)\n", card_in_punch_station? "card": "no card");
+	printf("release(%s) eq_count = %d\n",
+		card_in_punch_station? "card": "no card", eq_count);
     }
 
     if (power_on && card_in_punch_station) {
@@ -1443,10 +1459,10 @@ rel_key_backend(kpkey_t *key)
 static void
 release_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
-    if (!power_on) {
+    show_key_down(&rel_key);
+    if (!power_on || !card_in_punch_station) {
 	return;
     }
-    show_key_down(&rel_key);
     rel_key_backend(&rel_key);
 }
 
@@ -1475,22 +1491,19 @@ drop_key_backend(kpkey_t *key)
 	return;
     }
 
-    if (!enq_event(DUMMY, 0, True, SLOW))
-	return;
-
-    card_in_punch_station = False;
+    card_state = C_FLUX;
 
     /* Scroll the previous card away. */
-    if (ccard) {
-	for (i = 0; i <= col; i++)
-	    enq_event(LEFT, 0, False, FAST);
-	enq_event(INVISIBLE, 0, False, 0);
-	for (i = 0; i < N_COLS/2 + 3; i++)
-	    enq_event(PAN_LEFT, 0, False, FAST);
-    }
+    for (i = 0; i <= col; i++)
+	enq_event(LEFT, 0, False, FAST);
+    enq_event(INVISIBLE, 0, False, 0);
+    for (i = 0; i < N_COLS/2 + 3; i++)
+	enq_event(PAN_LEFT, 0, False, FAST);
 
     if (toggles[T_AUTO_FEED].on) {
 	do_feed(True);
+    } else {
+	enq_event(EMPTY, 0, False, 0);
     }
 }
 
@@ -1550,6 +1563,7 @@ pop_key(XtPointer data, XtIntervalId *id)
     kpkey_t *key = (kpkey_t *)data;
 
     XtVaSetValues(key->widget, XtNbackgroundPixmap, key->normal_pixmap, NULL);
+    key->timeout_id = 0;
 }
 
 /* Handle graphical transitions for a click. */
@@ -1589,7 +1603,7 @@ do_release(int delay)
     int i;
 
     /* The card is now officially invisible. */
-    card_in_punch_station = FALSE;
+    card_state = C_FLUX;
 
     /* Space over the remainder of the card. */
     for (i = col; i < N_COLS; i++) {
@@ -1600,6 +1614,9 @@ do_release(int delay)
     for (i = 0; i < N_COLS/2 + 10; i++) {
 	    enq_event(PAN_RIGHT, 0, False, delay);
     }
+
+    /* The punch station is now empty. */
+    enq_event(EMPTY, 0, False, 0);
 }
 
 /* Pull a card from the (infinite) hopper into the punch station. */
@@ -1618,6 +1635,8 @@ do_feed(Boolean keep_sequence)
     for (i = SLAM_COL; i < SLAM_TARGET_COL; i++) {
 	    enq_event(PAN_RIGHT, 0, False, VERY_FAST);
     }
+
+    /* The punch station is now full. */
     enq_event(VISIBLE, 0, False, 0);
 }
 
@@ -1653,6 +1672,12 @@ static void
 queued_press_rel(int ignored)
 {
     show_key_down(&rel_key);
+}
+
+static void
+queued_empty(int ignored)
+{
+    card_state = C_EMPTY;
 }
 
 /* Batch processing. */
@@ -1739,6 +1764,7 @@ batch_fsm(void)
 
 	case BS_CHAR:
 	    if (!card_in_punch_station) {
+		/* XXX: It might be in flux? */
 		static Boolean unfed = True;
 
 		if (mode == M_BATCH && unfed) {
