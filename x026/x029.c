@@ -125,7 +125,7 @@ static int		root_window;
 static int		card_window;
 static int		depth;
 static XFontStruct	*ifontinfo;
-static Atom		a_delete_me;
+Atom			a_delete_me;
 static int		line_number = 100;
 static Pixmap		hole_pixmap;
 
@@ -275,7 +275,7 @@ static XtActionsRec actions[] = {
     { "Right",		Right_action },
     { "Tab",		Tab_action },
     { "InsertSelection", InsertSelection_action },
-    { "confirm",	Confirm_action }
+    { "Confirm",	Confirm_action }
 };
 static int actioncount = XtNumber(actions);
 
@@ -1033,7 +1033,11 @@ DeleteWindow_action(Widget wid, XEvent *event, String *params,
 {
     action_dbg("DeleteWindow", wid, event, params, num_params);
 
-    exit(0);
+    if (wid == toplevel) {
+	exit(0);
+    } else {
+	XtPopdown(wid);
+    }
 }
 
 /* Find the first card in the deck. This is an external entry point. */
@@ -1043,6 +1047,9 @@ first_card(void)
     card_t *c;
 
     for (c = ccard; c && c->prev; c = c->prev) {
+    }
+    if (card_in_punch_station && c == ccard) {
+	return NULL;
     }
     return c;
 }
@@ -1060,10 +1067,23 @@ next_card(card_t *c)
     return n;
 }
 
+/* Return the number of cards. */
+int
+num_cards(void)
+{
+    int i = 0;
+    card_t *c;
+
+    for (c = first_card(); c != NULL; c = next_card(c)) {
+	i++;
+    }
+    return i;
+}
+
 static void
 save_key_backend(kpkey_t *key)
 {
-    if (power_on) {
+    if (power_on && card_in_punch_station) {
 	save_popup();
     }
 }

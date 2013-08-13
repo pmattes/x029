@@ -196,6 +196,8 @@ void
 save_popup(void)
 {
     Widget w;
+    int n;
+    char dialog_label[128];
 
     if (!save_popup_created) {
 	Dimension width, height;
@@ -203,8 +205,11 @@ save_popup(void)
 	/* Create the shell. */
 	save_shell = XtVaCreatePopupShell("save",
 	    transientShellWidgetClass, toplevel,
+	    XtNtitle, "x029 Save",
 	    NULL);
 	XtAddCallback(save_shell, XtNpopupCallback, center_it, NULL);
+	XtOverrideTranslations(save_shell,
+	    XtParseTranslationTable("<Message>WM_PROTOCOLS: DeleteWindow()"));
 
 	/* Create the dialog in the popup. */
 	save_dialog = XtVaCreateManagedWidget(
@@ -218,7 +223,7 @@ save_popup(void)
 	    XtNwidth, 200,
 	    NULL);
 	XtOverrideTranslations(w,
-	    XtParseTranslationTable("<Key>Return: confirm()"));
+	    XtParseTranslationTable("<Key>Return: Confirm()"));
 	XtVaSetValues(XtNameToWidget(save_dialog, XtNlabel),
 	    XtNwidth, 200,
 	    XtNbackground, get_cabinet(),
@@ -261,8 +266,11 @@ save_popup(void)
 
 	save_popup_created = True;
     }
+    n = num_cards();
+    (void) snprintf(dialog_label, sizeof(dialog_label),
+	    "Save File Name (%d card%s)", n, (n == 1)? "": "s");
     XtVaSetValues(save_dialog,
-	XtNlabel, "Save File Name",
+	XtNlabel, dialog_label,
 	NULL);
     if (get_cabinet() == XBlackPixel(display, default_screen))
 	XtVaSetValues(XtNameToWidget(save_dialog, XtNlabel), XtNforeground,
@@ -271,5 +279,5 @@ save_popup(void)
 	XtVaSetValues(XtNameToWidget(save_dialog, XtNlabel), XtNforeground,
 		get_foreground(), NULL);
     XtPopup(save_shell, XtGrabExclusive);
-    /*XSetWMProtocols(display, XtWindow(save_shell), &delete_me, 1);*/
+    XSetWMProtocols(display, XtWindow(save_shell), &a_delete_me, 1);
 }
