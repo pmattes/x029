@@ -105,6 +105,7 @@ find_cardimg(const char *name)
 	    return TO_CD(&cards[i]);
 	}
     }
+    return NULL;
 }
 
 /*

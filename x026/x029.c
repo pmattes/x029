@@ -319,6 +319,7 @@ static void do_feed(Boolean keep_sequence);
 static void enq_delay(void);
 static void do_release(int delay);
 static void batch_fsm(void);
+static void show_key_down(kpkey_t *key);
 
 static void dbg_printf(const char *format, ...);
 
@@ -362,7 +363,6 @@ main(int argc, char *argv[])
 {
     XtTranslations table;
     Pixmap icon;
-    int i;
 
     /* Figure out who we are */
     programname = strrchr(argv[0], '/');
@@ -1574,6 +1574,7 @@ pop_key(XtPointer data, XtIntervalId *id)
 }
 
 /* Handle graphical transitions for a click. */
+static void
 show_key_down(kpkey_t *key)
 {
     XtVaSetValues(key->widget, XtNbackgroundPixmap, key->pressed_pixmap, NULL);
@@ -1714,10 +1715,9 @@ static void
 batch_fsm(void)
 {
     static char buf[1024];
-    ssize_t n2r, nr;
+    ssize_t nr;
     static ssize_t rbsize = 0;
     static char *s = buf + sizeof(buf);
-    static Boolean any = False;
     char c;
 
     do {
@@ -1762,7 +1762,6 @@ batch_fsm(void)
 	    }
 
 	    /* Next, start munching on it. */
-	    any = True;
 	    bs = BS_CHAR;
 	    break;
 
