@@ -1,0 +1,24 @@
+# Auxiliary Makefile for x029
+
+all:
+	@echo "Must pick a specific make target."
+	@exit 1
+
+VER=2.0
+DIR=x029-$(VER)
+
+SOURCES = cardimg.c charset.c paste.c save.c x029.c
+HEADERS = cardimg.h charset.h jones.h paste.h save.h x029.h
+IMAGES = x029.bm carnegie2.xpm collins.xpm drop_pressed.xpm drop.xpm \
+	feed_pressed.xpm feed.xpm hole.xpm ibm.xpm off60.xpm on60.xpm \
+	red_off.xpm red_on.xpm rel_pressed.xpm rel.xpm save_pressed.xpm \
+	save.xpm
+MISC = Imakefile x029.man README
+FILES = $(SOURCES) $(HEADERS) $(IMAGES) $(MISC)
+
+x029-2.0-src.tgz: $(FILES)
+	rm -rf $(DIR)
+	mkdir $(DIR)
+	for i in $(FILES); do ln -s ../$$i $(DIR)/$$i; done
+	tar -czhf $@ $(DIR)
+	rm -rf $(DIR)
