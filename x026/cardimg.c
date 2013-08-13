@@ -33,9 +33,10 @@
 #include "jones.h"
 #include "cardimg.h"
 
-#include "collins.xpm"		/* card image */
-#include "carnegie2.xpm"	/* card image */
-#include "ibm.xpm"		/* card image */
+#include "collins.xpm"
+#include "carnegie2.xpm"
+#include "ibm.xpm"
+#include "harvard.xpm"
 
 static struct card_image {
 	const char *name;
@@ -51,6 +52,9 @@ static struct card_image {
 		  0, 0 } },
 	{ "ibm", "IBM", ibm,
 		{ PC_COLOR_CREAM | PC_CORNER_ROUND | PC_CUT_LEFT,
+		  0, 0 } },
+	{ "harvard", "Harvard University", harvard_xpm,
+		{ PC_COLOR_CREAM | PC_CORNER_ROUND | PC_CUT_RIGHT,
 		  0, 0 } },
 	{ NULL, NULL }
 };
