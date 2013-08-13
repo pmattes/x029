@@ -9,25 +9,7 @@
  * x029 card images.
  */
 
-#if 0
-#include <stdio.h>
-#include <string.h>
-#include <ctype.h>
-#include <errno.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#endif
 #include <X11/Intrinsic.h>
-#if 0
-#include <X11/StringDefs.h>
-#include <X11/Core.h>
-#include <X11/Shell.h>
-#include <X11/Xatom.h>
-#include <X11/Xaw/Command.h>
-#include <X11/Xaw/Dialog.h>
-#include <X11/Xaw/Porthole.h>
-#endif
 #include <X11/xpm.h>
 
 #include "jones.h"
@@ -37,6 +19,7 @@
 #include "carnegie2.xpm"
 #include "ibm.xpm"
 #include "harvard.xpm"
+#include "pink.xpm"
 
 static struct card_image {
 	const char *name;
@@ -44,10 +27,10 @@ static struct card_image {
 	char **pixmap_source;
 	unsigned char card_type[3];
 } cards[] = {
-	{ "collins", "Collins Radio Corporation", collins,
+	{ "collins", "Collins Radio Corporation", collins_xpm,
 		{ PC_COLOR_CREAM | PC_CORNER_ROUND | PC_CUT_LEFT,
 		  0, 0 } },
-	{ "cmu", "Carnegie Mellon University", carnegie2,
+	{ "cmu", "Carnegie Mellon University", carnegie2_xpm,
 		{ PC_COLOR_YELLOW_STRIPE | PC_CORNER_ROUND | PC_CUT_RIGHT,
 		  0, 0 } },
 	{ "ibm", "IBM", ibm_xpm,
@@ -55,6 +38,9 @@ static struct card_image {
 		  0, 0 } },
 	{ "harvard", "Harvard University", harvard_xpm,
 		{ PC_COLOR_CREAM | PC_CORNER_ROUND | PC_CUT_RIGHT,
+		  0, 0 } },
+	{ "pink", "Blank (pink)", pink_xpm,
+		{ PC_COLOR_PINK | PC_CORNER_ROUND,
 		  0, 0 } },
 	{ NULL, NULL }
 };
