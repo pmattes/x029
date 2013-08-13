@@ -543,7 +543,7 @@ toggle_callback(Widget w, XtPointer client_data, XtPointer call_data)
 /* Card-image data structures. */
 static card_t *ccard;
 static int col = 0;
-static GC gc, invgc, holegc, corner_gc;
+static GC gc, invgc, holegc;
 
 static Widget container, porth, scrollw, cardw, posw;
 static int scrollw_column;
@@ -791,8 +791,6 @@ define_widgets(void)
     xgcv.background = appres.cardcolor;
     xgcv.font = ifontinfo->fid;
     gc = XtGetGC(toplevel, GCForeground|GCBackground|GCFont, &xgcv);
-    xgcv.foreground = appres.cabinet;
-    corner_gc = XtGetGC(toplevel, GCForeground|GCBackground, &xgcv);
     xgcv.foreground = appres.cardcolor;
     xgcv.background = appres.foreground;
     xgcv.font = ifontinfo->fid;
