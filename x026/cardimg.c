@@ -50,7 +50,7 @@ static struct card_image {
 	{ "cmu", "Carnegie Mellon University", carnegie2,
 		{ PC_COLOR_YELLOW_STRIPE | PC_CORNER_ROUND | PC_CUT_RIGHT,
 		  0, 0 } },
-	{ "ibm", "IBM", ibm,
+	{ "ibm", "IBM", ibm_xpm,
 		{ PC_COLOR_CREAM | PC_CORNER_ROUND | PC_CUT_LEFT,
 		  0, 0 } },
 	{ "harvard", "Harvard University", harvard_xpm,
