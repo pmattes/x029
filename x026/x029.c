@@ -16,6 +16,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <fcntl.h>
+#include <stdarg.h>
 #include <X11/Intrinsic.h>
 #include <X11/StringDefs.h>
 #include <X11/Core.h>
@@ -160,24 +161,6 @@ static void key_init(kpkey_t *key, const char *name, Widget container, int x,
 	int y, char *normal_pixmap_src[], char *pressed_pixmap_src[],
 	key_backend_t backend);
 
-/* Queued actions (queued_xxx). */
-static void queued_nothing(int);
-static void queued_data(int);
-static void queued_multipunch(int);
-static void queued_left(int);
-static void queued_kybd_right(int);
-static void queued_rel_right(int);
-static void queued_home(int);
-static void queued_pan_right(int);
-static void queued_pan_left(int);
-static void queued_pan_up(int);
-static void queued_slam(int);
-static void queued_newcard(int);
-static void queued_power_on(int);
-static void queued_press_feed(int);
-static void queued_press_rel(int);
-static void queued_empty(int);
-
 /* Application resources. */
 typedef struct {
     Pixel	foreground;
@@ -254,45 +237,45 @@ static XtResource resources[] = {
 
 /* Fallback resources. */
 static String fallbacks[] = {
-    "*ifont:	7x13",
-    "*pos.font:	6x13bold",
-    "*pos.background: wheat2",
+    "*ifont:		7x13",
+    "*pos.font:		6x13bold",
+    "*pos.background:	wheat2",
     "*dialog*value*font: fixed",
-    "*switch.font:  6x10",
+    "*switch.font:  	6x10",
     "*switch.background:  grey92",
     "*font:		variable",
-    "*cabinet:	grey92",
+    "*cabinet:		grey92",
     "*cardColor:	ivory",
     NULL
 };
 
 /* Xt actions (xxx_action). */
-static void data_action(Widget, XEvent *, String *, Cardinal *);
-static void multi_punch_data_action(Widget, XEvent *, String *, Cardinal *);
-static void delete_window_action(Widget, XEvent *, String *, Cardinal *);
-static void home_action(Widget, XEvent *, String *, Cardinal *);
-static void left_action(Widget, XEvent *, String *, Cardinal *);
-static void release_action(Widget, XEvent *, String *, Cardinal *);
-static void redraw_action(Widget, XEvent *, String *, Cardinal *);
-static void right_action(Widget, XEvent *, String *, Cardinal *);
-static void tab_action(Widget, XEvent *, String *, Cardinal *);
+static void Data_action(Widget, XEvent *, String *, Cardinal *);
+static void MultiPunchData_action(Widget, XEvent *, String *, Cardinal *);
+static void DeleteWindow_action(Widget, XEvent *, String *, Cardinal *);
+static void Home_action(Widget, XEvent *, String *, Cardinal *);
+static void Left_action(Widget, XEvent *, String *, Cardinal *);
+static void Release_action(Widget, XEvent *, String *, Cardinal *);
+static void Redraw_action(Widget, XEvent *, String *, Cardinal *);
+static void Right_action(Widget, XEvent *, String *, Cardinal *);
+static void Tab_action(Widget, XEvent *, String *, Cardinal *);
 
 /* Xt callbacks. */
 static void key_press(Widget, XtPointer, XtPointer);
 
 /* Actions. */
 static XtActionsRec actions[] = {
-    { "Data",		data_action },
-    { "MultiPunchData", multi_punch_data_action },
-    { "DeleteWindow",	delete_window_action },
-    { "Home",		home_action },
-    { "Left",		left_action },
-    { "Release",	release_action },
-    { "Redraw",		redraw_action },
-    { "Right",		right_action },
-    { "Tab",		tab_action },
-    { "insert-selection", insert_selection_action },
-    { "confirm",	confirm_action }
+    { "Data",		Data_action },
+    { "MultiPunchData", MultiPunchData_action },
+    { "DeleteWindow",	DeleteWindow_action },
+    { "Home",		Home_action },
+    { "Left",		Left_action },
+    { "Release",	Release_action },
+    { "Redraw",		Redraw_action },
+    { "Right",		Right_action },
+    { "Tab",		Tab_action },
+    { "InsertSelection", InsertSelection_action },
+    { "confirm",	Confirm_action }
 };
 static int actioncount = XtNumber(actions);
 
@@ -310,7 +293,25 @@ static void drop_key_backend(kpkey_t *key);
 static void rel_key_backend(kpkey_t *);
 static void feed_key_backend(kpkey_t *);
 
-/* Forward references. */
+/* Queued actions (queued_xxx). */
+static void queued_nothing(int);
+static void queued_data(int);
+static void queued_multipunch(int);
+static void queued_left(int);
+static void queued_kybd_right(int);
+static void queued_rel_right(int);
+static void queued_home(int);
+static void queued_pan_right(int);
+static void queued_pan_left(int);
+static void queued_pan_up(int);
+static void queued_slam(int);
+static void queued_newcard(int);
+static void queued_power_on(int);
+static void queued_press_feed(int);
+static void queued_press_rel(int);
+static void queued_empty(int);
+
+/* Other forward references. */
 static void define_widgets(void);
 static void startup_power_feed(void);
 static void startup_power(void);
@@ -318,6 +319,8 @@ static void do_feed(Boolean keep_sequence);
 static void enq_delay(void);
 static void do_release(int delay);
 static void batch_fsm(void);
+
+static void dbg_printf(const char *format, ...);
 
 /* Syntax. */
 void
@@ -521,7 +524,8 @@ toggle_callback(Widget w, XtPointer client_data, XtPointer call_data)
 
     if (t != &toggles[T_CLEAR]) {
 	t->on = !t->on;
-	XtVaSetValues(w, XtNbackgroundPixmap, t->on? toggle_on: toggle_off, NULL);
+	XtVaSetValues(w, XtNbackgroundPixmap, t->on? toggle_on: toggle_off,
+		NULL);
 	return;
     }
 
@@ -531,8 +535,9 @@ toggle_callback(Widget w, XtPointer client_data, XtPointer call_data)
     t->on = !t->on;
     XtVaSetValues(w, XtNbackgroundPixmap, t->on? toggle_on: toggle_off, NULL);
     (void) XtAppAddTimeOut(appcontext, SLOW * 6, unclear_event, NULL);
-    if (card_in_punch_station)
+    if (card_in_punch_station) {
 	do_release(VERY_FAST);
+    }
 }
 
 /* Card-image data structures. */
@@ -561,23 +566,23 @@ define_widgets(void)
     Dimension sx;
     XpmAttributes attributes;
     static char translations[] = "\
-	    <Key>Left:	Left()\n\
-	    <Key>BackSpace:	Left()\n\
-	    <Key>Right:	Right()\n\
-	    <Key>Home:	Home()\n\
-	    <Key>Return:	Release()\n\
-	    <Key>KP_Enter:	Home()\n\
-	    <Key>Down:	Release()\n\
-	    <Key>Tab:	Tab()\n\
-	    <Btn2Down>:	insert-selection(PRIMARY)\n\
-	    Alt<Key>:	MultiPunchData()\n\
-	    Meta<Key>:	MultiPunchData()\n\
-	    <Key>:		Data()\n";
+	<Key>Left:	Left()\n\
+	<Key>BackSpace:	Left()\n\
+	<Key>Right:	Right()\n\
+	<Key>Home:	Home()\n\
+	<Key>Return:	Release()\n\
+	<Key>KP_Enter:	Home()\n\
+	<Key>Down:	Release()\n\
+	<Key>Tab:	Tab()\n\
+	<Btn2Down>:	InsertSelection(PRIMARY)\n\
+	Alt<Key>:	MultiPunchData()\n\
+	Meta<Key>:	MultiPunchData()\n\
+	<Key>:		Data()\n";
 
     /* Create a container for the whole thing. */
     container = XtVaCreateManagedWidget(
 	"container", compositeWidgetClass, toplevel,
-	XtNwidth, 10,
+	XtNwidth, 10,	/* temporary dimensions */
 	XtNheight, 10,
 	XtNbackground, appres.cabinet,
 	NULL);
@@ -875,7 +880,7 @@ draw_col(int cn)
     int j;
     int x = LEFT_PAD + CELL_X(cn);
 
-#if defined(DEBUG) /*[*/
+#if defined(XXDEBUG) /*[*/
     printf(" draw_col(col %d)\n", cn);
 #endif /*]*/
 
@@ -956,33 +961,28 @@ queued_newcard(int replace)
 
 /* Redraw the entire card image. */
 static void
-redraw_action(Widget wid, XEvent  *event, String  *params,
-	Cardinal *num_params)
+Redraw_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
     int i;
     Dimension x, y, w, h;
+
+    action_dbg("Redraw", wid, event, params, num_params);
 
     if (event && event->type == Expose) {
 	x = event->xexpose.x;
 	y = event->xexpose.y;
 	w = event->xexpose.width;
 	h = event->xexpose.height;
-#if defined(DEBUG) /*[*/
-	printf("redraw x=%d y=%d w=%d h=%d\n", x, y, w, h);
-#endif /*]*/
     } else {
 	x = y = 0;
 	w = card_width;
 	h = card_height;
-#if defined(DEBUG) /*[*/
-	printf("redraw without Expose event\n");
-#endif /*]*/
     }
 
     /* Slice off the padding. */
     if (x < LEFT_PAD) {			/* Left. */
 	if (w <= LEFT_PAD - x) {
-#if defined(DEBUG) /*[*/
+#if defined(XDEBUG) /*[*/
 	    printf("ignoring left\n");
 #endif /*]*/
 	    return;
@@ -994,7 +994,7 @@ redraw_action(Widget wid, XEvent  *event, String  *params,
     }
     if (y < TOP_PAD) {			/* Top. */
 	if (h <= TOP_PAD - y) {
-#if defined(DEBUG) /*[*/
+#if defined(XDEBUG) /*[*/
 	    printf("ignoring top\n");
 #endif /*]*/
 	    return;
@@ -1005,7 +1005,7 @@ redraw_action(Widget wid, XEvent  *event, String  *params,
 	y -= TOP_PAD;
     }
     if (x >= (CELL_X(N_COLS))) {		/* Right. */
-#if defined(DEBUG) /*[*/
+#if defined(XDEBUG) /*[*/
 	printf("ignoring right\n");
 #endif /*]*/
 	return;
@@ -1013,7 +1013,7 @@ redraw_action(Widget wid, XEvent  *event, String  *params,
     if (x + w > (CELL_X(N_COLS)))
 	w = (CELL_X(N_COLS)) - x;
     if (y >= (CELL_Y(N_ROWS))) {		/* Bottom. */
-#if defined(DEBUG) /*[*/
+#if defined(XDEBUG) /*[*/
 	printf("ignoring left\n");
 #endif /*]*/
 	return;
@@ -1030,9 +1030,11 @@ redraw_action(Widget wid, XEvent  *event, String  *params,
 
 /* Exit. */
 static void
-delete_window_action(Widget wid, XEvent *event, String *params,
+DeleteWindow_action(Widget wid, XEvent *event, String *params,
 	Cardinal *num_params)
 {
+    action_dbg("DeleteWindow", wid, event, params, num_params);
+
     exit(0);
 }
 
@@ -1295,8 +1297,7 @@ deq_event(XtPointer data, XtIntervalId *id)
     --eq_count;
 
     /* Run it. */
-    if (appres.debug)
-	printf("run %s(%d)\n", eq_name[e->evtype], e->delay);
+    dbg_printf("run %s(%d)\n", eq_name[e->evtype], e->delay);
     (*eq_fn[e->evtype])(e->param);
 
     /* Free it. */
@@ -1308,12 +1309,8 @@ deq_event(XtPointer data, XtIntervalId *id)
      * Otherwise, see if the batch FSM needs cranking.
      */
     if (eq_count) {
-	if (appres.debug)
-	    printf("TimeOut(%d)\n", eq_first->delay);
 	(void) XtAppAddTimeOut(appcontext, eq_first->delay, deq_event, NULL);
     } else {
-	if (appres.debug)
-	    printf("No TimeOut\n");
 	if (mode != M_INTERACTIVE) {
 	    batch_fsm();
 	}
@@ -1370,12 +1367,14 @@ enq_delay(void)
  */
 
 static void
-data_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
+Data_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
     XKeyEvent *kevent = (XKeyEvent *)event;
     char buf[10];
     KeySym ks;
     int ll;
+
+    action_dbg("Data", wid, event, params, num_params);
 
     if (!power_on || !card_in_punch_station) {
 	return;
@@ -1388,13 +1387,15 @@ data_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 }
 
 static void
-multi_punch_data_action(Widget wid, XEvent *event, String *params,
+MultiPunchData_action(Widget wid, XEvent *event, String *params,
 	Cardinal *num_params)
 {
     XKeyEvent *kevent = (XKeyEvent *)event;
     char buf[10];
     KeySym ks;
     int ll;
+
+    action_dbg("MultiPunchData", wid, event, params, num_params);
 
     if (!power_on || !card_in_punch_station) {
 	return;
@@ -1407,25 +1408,31 @@ multi_punch_data_action(Widget wid, XEvent *event, String *params,
 }
 
 static void
-left_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
+Left_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
+    action_dbg("Left", wid, event, params, num_params);
+
     if (power_on && card_in_punch_station) {
 	enq_event(LEFT, 0, !appres.typeahead, SLOW);
     }
 }
 
 static void
-right_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
+Right_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
+    action_dbg("Right", wid, event, params, num_params);
+
     if (power_on && card_in_punch_station) {
 	enq_event(KYBD_RIGHT, 1, !appres.typeahead, SLOW);
     }
 }
 
 static void
-home_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
+Home_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
     int i;
+
+    action_dbg("Home", wid, event, params, num_params);
 
     if (power_on && card_in_punch_station) {
 	if (!enq_event(DUMMY, 0, !appres.typeahead, SLOW))
@@ -1444,10 +1451,8 @@ home_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 static void
 rel_key_backend(kpkey_t *key)
 {
-    if (appres.debug) {
-	printf("release(%s) eq_count = %d\n",
-		card_in_punch_station? "card": "no card", eq_count);
-    }
+    dbg_printf("release(%s) eq_count = %d\n",
+	    card_in_punch_station? "card": "no card", eq_count);
 
     if (power_on && card_in_punch_station) {
 	do_release(VERY_FAST);
@@ -1457,8 +1462,10 @@ rel_key_backend(kpkey_t *key)
 }
 
 static void
-release_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
+Release_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
+    action_dbg("Release", wid, event, params, num_params);
+
     show_key_down(&rel_key);
     if (!power_on || !card_in_punch_station) {
 	return;
@@ -1467,9 +1474,11 @@ release_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 }
 
 static void
-tab_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
+Tab_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
     int i;
+
+    action_dbg("Tab", wid, event, params, num_params);
 
     if (power_on && card_in_punch_station) {
 	if (!enq_event(DUMMY, 0, True, SLOW))
@@ -1714,21 +1723,18 @@ batch_fsm(void)
     char c;
 
     do {
-	if (appres.debug)
-	    printf("batch_fsm: %s\n", bs_name[bs]);
+	dbg_printf("batch_fsm: %s\n", bs_name[bs]);
 
 	switch (bs) {
 
 	case BS_READ:
 	    /* Keep munching on the same buffer. */
 	    if (s < buf + rbsize) {
-		if (appres.debug)
-		    printf(" continuing, %zd more\n", buf + rbsize - s);
+		dbg_printf(" continuing, %zd more\n", buf + rbsize - s);
 	    } else {
 		/* Read the next card. */
 		nr = read(batchfd, buf, sizeof(buf));
-		if (appres.debug)
-		    printf(" got %zd chars\n", nr);
+		dbg_printf(" got %zd chars\n", nr);
 		if (nr == 0) {
 		    if (read_id != 0) {
 			XtRemoveInput(read_id);
@@ -1778,8 +1784,7 @@ batch_fsm(void)
 		break;
 	    }
 	    c = *s++;
-	    if (appres.debug)
-		printf(" c = 0x%02x, col = %d\n", c & 0xff, col);
+	    dbg_printf(" c = 0x%02x, col = %d\n", c & 0xff, col);
 	    if (c == '\n') {
 		/*
 		 * End of input line.
@@ -1816,8 +1821,7 @@ batch_fsm(void)
 	    break;
 
 	case BS_SPACE:
-	    if (appres.debug)
-		printf(" col = %d\n", col);
+	    dbg_printf(" col = %d\n", col);
 
 	    if (col >= N_COLS - 1) {
 		/* End of card.  Release it. */
@@ -1867,4 +1871,49 @@ Pixel
 get_foreground(void)
 {
     return appres.foreground;
+}
+
+/* Debug printing. */
+static void
+dbg_printf(const char *format, ...)
+{
+    va_list ap;
+
+    if (!appres.debug) {
+	return;
+    }
+
+    va_start(ap, format);
+    vfprintf(stdout, format, ap);
+    va_end(ap);
+}
+
+void
+action_dbg(const char *name, Widget wid, XEvent *event, String *params,
+	Cardinal *num_params)
+{
+    Cardinal i;
+
+    if (!appres.debug) {
+	return;
+    }
+
+    printf("%s(widget %p", name, (void *)wid);
+    if (event) {
+	if (event->type == Expose) {
+	    dbg_printf(", Expose x=%d y=%d w=%d h=%d",
+		    event->xexpose.x,
+		    event->xexpose.y,
+		    event->xexpose.width,
+		    event->xexpose.height);
+	} else {
+	    dbg_printf(", event %d", event->type);
+	}
+    } else {
+	dbg_printf(", no event");
+    }
+    for(i = 0; i < *num_params; i++) {
+	printf(", %s", params[i]);
+    }
+    printf(")\n");
 }
