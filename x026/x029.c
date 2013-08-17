@@ -36,14 +36,14 @@
 #include "save.h"
 
 #include "hole.xpm"		/* hole image */
-#include "off60.xpm"		/* switch, off */
-#include "on60.xpm"		/* switch, on */
+#include "flipper_off.xpm"	/* power switch, off */
+#include "flipper_on.xpm"	/* power switch, on */
+#include "off60.xpm"		/* toggle switch, off */
+#include "on60.xpm"		/* toggle switch, on */
 #include "feed.xpm"		/* FEED key */
 #include "feed_pressed.xpm"	/* FEED key */
 #include "rel.xpm"		/* REL key */
 #include "rel_pressed.xpm"	/* REL key */
-#include "red_off.xpm"		/* power switch */
-#include "red_on.xpm"		/* power switch */
 #include "save.xpm"		/* SAVE button */
 #include "save_pressed.xpm"	/* SAVE button */
 #include "drop.xpm"		/* DROP button */
@@ -110,7 +110,7 @@ char *bottom_label3[] = { "DUP", NULL, "SEL", NULL, NULL, NULL, NULL, NULL };
 #define KEY_WIDTH	40
 #define KEY_HEIGHT	40
 
-#define POWER_WIDTH	50
+#define POWER_WIDTH	30
 #define POWER_HEIGHT	40
 
 Widget			toplevel;
@@ -129,7 +129,7 @@ Atom			a_delete_me;
 static int		line_number = 100;
 static Pixmap		hole_pixmap;
 
-static Pixmap		red_off, red_on;
+static Pixmap		flipper_off, flipper_on;
 static Widget		power_widget;
 
 int			batchfd = -1;
@@ -487,7 +487,7 @@ static void
 do_power_off(void)
 {
     power_on = False;
-    XtVaSetValues(power_widget, XtNbackgroundPixmap, red_off, NULL);
+    XtVaSetValues(power_widget, XtNbackgroundPixmap, flipper_off, NULL);
     (void) XtAppAddTimeOut(appcontext, VERY_SLOW * 2, power_off_timeout, NULL);
 }
 
@@ -657,23 +657,24 @@ define_widgets(void)
 	NULL);
 
     /* Add the power button. */
-    if (XpmCreatePixmapFromData(display, XtWindow(container), red_on_xpm,
-		    &red_on, &shapemask, &attributes) != XpmSuccess) {
+    if (XpmCreatePixmapFromData(display, XtWindow(container), flipper_on_xpm,
+		    &flipper_on, &shapemask, &attributes) != XpmSuccess) {
 	    XtError("XpmCreatePixmapFromData failed");
     }
-    if (XpmCreatePixmapFromData(display, XtWindow(container), red_off_xpm,
-		    &red_off, &shapemask, &attributes) != XpmSuccess) {
+    if (XpmCreatePixmapFromData(display, XtWindow(container), flipper_off_xpm,
+		    &flipper_off, &shapemask, &attributes) != XpmSuccess) {
 	    XtError("XpmCreatePixmapFromData failed");
     }
     power_widget = XtVaCreateManagedWidget(
 	"power", commandWidgetClass, container,
-	XtNbackgroundPixmap, red_off,
+	XtNbackgroundPixmap, flipper_off,
 	XtNlabel, "",
 	XtNwidth, POWER_WIDTH,
 	XtNheight, POWER_HEIGHT,
 	XtNx, BUTTON_GAP,
 	XtNy, h - CARD_AIR - POWER_HEIGHT,
 	XtNborderWidth, 0,
+	XtNhighlightThickness, 0,
 	NULL
     );
     XtAddCallback(power_widget, XtNcallback, power_callback, NULL);
@@ -1673,7 +1674,7 @@ static void
 queued_power_on(int ignored)
 {
     power_on = True;
-    XtVaSetValues(power_widget, XtNbackgroundPixmap, red_on, NULL);
+    XtVaSetValues(power_widget, XtNbackgroundPixmap, flipper_on, NULL);
 }
 
 static void
