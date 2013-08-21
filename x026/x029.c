@@ -48,6 +48,7 @@
 #include "save_pressed.xpm"	/* SAVE button */
 #include "drop.xpm"		/* DROP button */
 #include "drop_pressed.xpm"	/* DROP button */
+#include "column_indicator.xpm"	/* column indicator */
 #include "x029.bm"		/* icon */
 
 enum {
@@ -550,7 +551,7 @@ static card_t *ccard;
 static int col = 0;
 static GC gc, invgc, holegc;
 
-static Widget container, porth, scrollw, cardw, posw;
+static Widget container, porth, scrollw, cardw, posw_porth, posw;
 static int scrollw_column;
 #define SCROLLW_X()	(-(LEFT_PAD+CELL_X(scrollw_column)))
 
@@ -568,6 +569,7 @@ define_widgets(void)
     int i;
     Pixmap pixmap, shapemask;
     Pixmap hole_shapemask;
+    Pixmap column_indicator;
     Dimension sx;
     XpmAttributes attributes;
     static char translations[] = "\
@@ -699,6 +701,7 @@ define_widgets(void)
 	    drop_key_backend);
 
     /* Add the position counter in the lower right. */
+#if 0
     posw = XtVaCreateManagedWidget(
 	"pos", labelWidgetClass, container,
 	XtNlabel, POSW_81 POSW_IND,
@@ -710,6 +713,32 @@ define_widgets(void)
 	XtNborderColor, appres.background,
 	XtNresize, False,
 	NULL);
+#else
+    /* Create the porthole within the container. */
+    if (XpmCreatePixmapFromData(display, XtWindow(container),
+		column_indicator_xpm, &column_indicator, &shapemask,
+		&attributes) != XpmSuccess) {
+	    XtError("XpmCreatePixmapFromData failed");
+    }
+    posw_porth = XtVaCreateManagedWidget(
+	"posw_porthole", portholeWidgetClass, container,
+	XtNwidth, KEY_WIDTH,
+	XtNheight, 29,
+	XtNx, w - BUTTON_GAP - KEY_WIDTH - 2*BUTTON_BW,
+	XtNy, h - CARD_AIR - POWER_HEIGHT - BUTTON_GAP - KEY_HEIGHT,
+	XtNborderWidth, 0,
+	NULL);
+    posw = XtVaCreateManagedWidget(
+	"posw", compositeWidgetClass, posw_porth,
+	XtNwidth, 1172,
+	XtNheight, 29,
+	XtNx, 0,
+	XtNy, 0,
+	XtNbackgroundPixmap, column_indicator,
+	XtNborderWidth, 1,
+	XtNborderColor, appres.background,
+	NULL);
+#endif
 
     /* Add the FEED button. */
     key_init(&feed_key, "FEED", container,
@@ -916,6 +945,8 @@ draw_col(int cn)
 static void
 set_posw(int c)
 {
+    col = c;
+#if 0
     static char bb[16];
     static char bp[3];
     static char bn[3];
@@ -970,6 +1001,9 @@ set_posw(int c)
     }
     strcat(bb, POSW_IND);
     XtVaSetValues(posw, XtNlabel, bb, NULL);
+#else
+    XtVaSetValues(posw, XtNx, -(col * 14), NULL);
+#endif
 }
 
 /* Go to the next card. */
@@ -1260,7 +1294,9 @@ static void
 queued_invisible(int ignored)
 {
     card_state = C_FLUX;
+#if 0
     XtVaSetValues(posw, XtNlabel, POSW_81 POSW_IND, NULL);
+#endif
 }
 
 static void
@@ -1766,7 +1802,9 @@ queued_empty(int ignored)
 static void
 queued_spin_pos(int ignored)
 {
+#if 0
     XtVaSetValues(posw, XtNlabel, POSW_INT POSW_IND, NULL);
+#endif
 }
 
 /* Batch processing. */
