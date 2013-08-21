@@ -113,6 +113,10 @@ char *bottom_label3[] = { "DUP", NULL, "SEL", NULL, NULL, NULL, NULL, NULL };
 #define POWER_WIDTH	30
 #define POWER_HEIGHT	40
 
+#define POSW_81		"80   -"
+#define POSW_INT        " -  ' "
+#define POSW_IND	"\n   ^"
+
 Widget			toplevel;
 Display			*display;
 int			default_screen;
@@ -238,7 +242,7 @@ static XtResource resources[] = {
 /* Fallback resources. */
 static String fallbacks[] = {
     "*ifont:		7x13",
-    "*pos.font:		6x13bold",
+    "*pos.font:		6x13",
     "*pos.background:	wheat2",
     "*dialog*value*font: fixed",
     "*switch.font:  	6x10",
@@ -310,6 +314,7 @@ static void queued_power_on(int);
 static void queued_press_feed(int);
 static void queued_press_rel(int);
 static void queued_empty(int);
+static void queued_spin_pos(int);
 
 /* Other forward references. */
 static void define_widgets(void);
@@ -616,7 +621,7 @@ define_widgets(void)
     hole_height = attributes.height;
     w = card_width + 2*CARD_AIR;
     h = SWITCH_SKIP + card_height + 2*CARD_AIR + 2*BUTTON_GAP + 2*BUTTON_BW +
-	BUTTON_HEIGHT;
+	BUTTON_HEIGHT + BUTTON_GAP + POWER_HEIGHT;
     XtVaSetValues(container,
 	XtNwidth, w,
 	XtNheight, h,
@@ -671,7 +676,7 @@ define_widgets(void)
 	XtNlabel, "",
 	XtNwidth, POWER_WIDTH,
 	XtNheight, POWER_HEIGHT,
-	XtNx, BUTTON_GAP,
+	XtNx, w - BUTTON_GAP - POWER_WIDTH - 2*BUTTON_BW,
 	XtNy, h - CARD_AIR - POWER_HEIGHT,
 	XtNborderWidth, 0,
 	XtNhighlightThickness, 0,
@@ -682,24 +687,24 @@ define_widgets(void)
     /* Add the save button. */
     key_init(&save_key, "SAVE", container,
 	    BUTTON_GAP + POWER_WIDTH + BUTTON_GAP,
-	    h - CARD_AIR - KEY_HEIGHT,
+	    h - CARD_AIR - POWER_HEIGHT - BUTTON_GAP - KEY_HEIGHT,
 	    save_xpm, save_pressed_xpm,
 	    save_key_backend);
 
     /* Add the drop button. */
     key_init(&drop_key, "DROP", container,
 	    BUTTON_GAP + POWER_WIDTH + BUTTON_GAP + KEY_WIDTH,
-	    h - CARD_AIR - KEY_HEIGHT,
+	    h - CARD_AIR - POWER_HEIGHT - BUTTON_GAP - KEY_HEIGHT,
 	    drop_xpm, drop_pressed_xpm,
 	    drop_key_backend);
 
     /* Add the position counter in the lower right. */
     posw = XtVaCreateManagedWidget(
 	"pos", labelWidgetClass, container,
-	XtNlabel, "-",
+	XtNlabel, POSW_81 POSW_IND,
 	XtNwidth, KEY_WIDTH,
 	XtNx, w - BUTTON_GAP - KEY_WIDTH - 2*BUTTON_BW,
-	XtNy, h - CARD_AIR - KEY_HEIGHT,
+	XtNy, h - CARD_AIR - POWER_HEIGHT - BUTTON_GAP - KEY_HEIGHT,
 	XtNheight, KEY_HEIGHT,
 	XtNborderWidth, 0,
 	XtNborderColor, appres.background,
@@ -709,7 +714,7 @@ define_widgets(void)
     /* Add the FEED button. */
     key_init(&feed_key, "FEED", container,
 	    w - 2 * (BUTTON_GAP + KEY_WIDTH + 2*BUTTON_BW),
-	    h - CARD_AIR - KEY_HEIGHT,
+	    h - CARD_AIR - POWER_HEIGHT - BUTTON_GAP - KEY_HEIGHT,
 	    feed_xpm, feed_pressed_xpm,
 	    feed_key_backend);
     XtVaSetValues(feed_key.widget, XtNsensitive, mode == M_INTERACTIVE,
@@ -718,7 +723,7 @@ define_widgets(void)
     /* Add the REL button. */
     key_init(&rel_key, "REL", container,
 	    w - 2 * (BUTTON_GAP + KEY_WIDTH + 2*BUTTON_BW) - KEY_WIDTH,
-	    h - CARD_AIR - KEY_HEIGHT,
+	    h - CARD_AIR - POWER_HEIGHT - BUTTON_GAP - KEY_HEIGHT,
 	    rel_xpm, rel_pressed_xpm,
 	    rel_key_backend);
     XtVaSetValues(rel_key.widget, XtNsensitive, mode == M_INTERACTIVE,
@@ -742,7 +747,7 @@ define_widgets(void)
 	    "switchcmd", commandWidgetClass, container,
 	    XtNwidth, SWITCH_WIDTH,
 	    XtNx, sx + i*(SWITCH_WIDTH + BUTTON_GAP),
-	    XtNy, h - BUTTON_GAP - SWITCH_HEIGHT - 30,
+	    XtNy, h - BUTTON_GAP - POWER_HEIGHT - BUTTON_GAP - SWITCH_HEIGHT - 30,
 	    XtNheight, SWITCH_HEIGHT,
 	    XtNborderWidth, 0,
 	    XtNlabel, "",
@@ -755,7 +760,7 @@ define_widgets(void)
 	    "switch", labelWidgetClass, container,
 	    XtNwidth, SWITCH_WIDTH,
 	    XtNx, sx + i*(SWITCH_WIDTH + BUTTON_GAP),
-	    XtNy, h - BUTTON_GAP - SWITCH_HEIGHT - 40,
+	    XtNy, h - BUTTON_GAP - POWER_HEIGHT - BUTTON_GAP - SWITCH_HEIGHT - 40,
 	    XtNborderWidth, 0,
 	    XtNlabel, top_label[i],
 	    NULL);
@@ -763,7 +768,7 @@ define_widgets(void)
 	    "switch", labelWidgetClass, container,
 	    XtNwidth, SWITCH_WIDTH,
 	    XtNx, sx + i*(SWITCH_WIDTH + BUTTON_GAP),
-	    XtNy, h - BUTTON_GAP - 35,
+	    XtNy, h - BUTTON_GAP - POWER_HEIGHT - BUTTON_GAP - 35,
 	    XtNborderWidth, 0,
 	    XtNlabel, bottom_label1[i],
 	    NULL);
@@ -772,7 +777,7 @@ define_widgets(void)
 		"switch", labelWidgetClass, container,
 		XtNwidth, SWITCH_WIDTH,
 		XtNx, sx + i*(SWITCH_WIDTH + BUTTON_GAP),
-		XtNy, h - BUTTON_GAP - 25,
+		XtNy, h - BUTTON_GAP - POWER_HEIGHT - BUTTON_GAP - 25,
 		XtNborderWidth, 0,
 		XtNlabel, bottom_label2[i],
 		NULL);
@@ -781,7 +786,7 @@ define_widgets(void)
 		"switch", labelWidgetClass, container,
 		XtNwidth, SWITCH_WIDTH,
 		XtNx, sx + i*(SWITCH_WIDTH + BUTTON_GAP),
-		XtNy, h - BUTTON_GAP - 15,
+		XtNy, h - BUTTON_GAP - POWER_HEIGHT - BUTTON_GAP - 15,
 		XtNborderWidth, 0,
 		XtNlabel, bottom_label3[i],
 		NULL);
@@ -829,7 +834,7 @@ define_widgets(void)
 	XtNwidth, CELL_WIDTH,
 	XtNheight, C2H,
 	XtNx, CARD_AIR + LEFT_PAD + CELL_X((N_COLS / 2) + 2) + 4,
-	XtNy, h-C2H-2 - SWITCH_SKIP,
+	XtNy, h-C2H-2 - SWITCH_SKIP - BUTTON_GAP - POWER_HEIGHT,
 	NULL);
     XtRealizeWidget(ww);
 }
@@ -911,13 +916,59 @@ draw_col(int cn)
 static void
 set_posw(int c)
 {
-    static char bb[3];
+    static char bb[16];
+    static char bp[3];
+    static char bn[3];
 
     col = c;
+
+    /*
+     * Always display six characters (. is space):
+     *         |
+     *   1: -  '02
+     *   2:  '02'0
+     *   3:  02'04
+     *   4: 2'04'0
+     *  10: 8'10'1
+     *  11: '10'12
+     *  12: 0'12'1
+     *  78: 6'78'7
+     *  79: '78'80
+     *  80: 8'80
+     *  81: 80  -'
+     */
     if (col >= N_COLS)
-	strcpy(bb, "-");
-    else
-	sprintf(bb, "%d", col+1);
+	strcpy(bb, POSW_81);
+    else {
+	int dcol = col + 1;
+
+	switch (dcol) {
+	case 1:
+	    strcpy(bb, "-  ' 2");
+	    break;
+	case 2:
+	    strcpy(bb, " ' 2' ");
+	    break;
+        case 3:
+	    strcpy(bb, "  2' 4");
+	    break;
+	default:
+	    if (dcol % 2) {
+		/* Odd */
+		sprintf(bb, "'%2d'%2d", dcol - 1, dcol + 1);
+	    } else {
+		/* Even */
+		sprintf(bp, "%2d", dcol - 2);
+		sprintf(bn, "%2d", dcol + 2);
+		sprintf(bb, "%c'%2d'%c", bp[1], dcol, bn[0]);
+	    }
+	    break;
+	case 80:
+	    strcpy(bb, "8'80  ");
+	    break;
+	}
+    }
+    strcat(bb, POSW_IND);
     XtVaSetValues(posw, XtNlabel, bb, NULL);
 }
 
@@ -1209,7 +1260,7 @@ static void
 queued_invisible(int ignored)
 {
     card_state = C_FLUX;
-    XtVaSetValues(posw, XtNlabel, "-", NULL);
+    XtVaSetValues(posw, XtNlabel, POSW_81 POSW_IND, NULL);
 }
 
 static void
@@ -1225,7 +1276,7 @@ queued_visible(int ignored)
 enum evtype { DUMMY, DATA, MULTI, LEFT, KYBD_RIGHT, HOME,
 	      PAN_RIGHT, PAN_LEFT, PAN_UP, SLAM, NEWCARD,
 	      INVISIBLE, VISIBLE, REL_RIGHT, POWER_ON, PRESS_FEED, PRESS_REL,
-	      EMPTY
+	      EMPTY, SPIN_POS
 };
 void (*eq_fn[])(int) = {
     queued_nothing,
@@ -1246,11 +1297,12 @@ void (*eq_fn[])(int) = {
     queued_press_feed,
     queued_press_rel,
     queued_empty,
+    queued_spin_pos,
 };
 char *eq_name[] = {
     "DUMMY", "DATA", "MULTI", "LEFT", "KYBD_RIGHT", "HOME", "PAN_RIGHT",
     "PAN_LEFT", "PAN_UP", "SLAM", "NEWCARD", "INVISIBLE", "VISIBLE",
-    "REL_RIGHT", "POWER_ON", "PRESS_FEED", "PRESS_REL", "EMPTY"
+    "REL_RIGHT", "POWER_ON", "PRESS_FEED", "PRESS_REL", "EMPTY", "SPIN_POS"
 };
 typedef struct event {
     struct event *next;
@@ -1662,6 +1714,8 @@ do_feed(Boolean keep_sequence)
 	    enq_event(PAN_UP, 0, False, FAST);
     }
     for (i = SLAM_COL; i < SLAM_TARGET_COL; i++) {
+	    if (i == SLAM_TARGET_COL - 4)
+		enq_event(SPIN_POS, 0, False, 0);
 	    enq_event(PAN_RIGHT, 0, False, VERY_FAST);
     }
 
@@ -1707,6 +1761,12 @@ static void
 queued_empty(int ignored)
 {
     card_state = C_EMPTY;
+}
+
+static void
+queued_spin_pos(int ignored)
+{
+    XtVaSetValues(posw, XtNlabel, POSW_INT POSW_IND, NULL);
 }
 
 /* Batch processing. */
