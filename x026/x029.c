@@ -316,7 +316,6 @@ static void queued_power_on(int);
 static void queued_press_feed(int);
 static void queued_press_rel(int);
 static void queued_empty(int);
-static void queued_spin_pos(int);
 
 /* Other forward references. */
 static void define_widgets(void);
@@ -702,21 +701,7 @@ define_widgets(void)
 	    drop_xpm, drop_pressed_xpm,
 	    drop_key_backend);
 
-    /* Add the position counter in the lower right. */
-#if 0
-    posw = XtVaCreateManagedWidget(
-	"pos", labelWidgetClass, container,
-	XtNlabel, POSW_81 POSW_IND,
-	XtNwidth, KEY_WIDTH,
-	XtNx, w - BUTTON_GAP - KEY_WIDTH - 2*BUTTON_BW,
-	XtNy, h - CARD_AIR - POWER_HEIGHT - BUTTON_GAP - KEY_HEIGHT,
-	XtNheight, KEY_HEIGHT,
-	XtNborderWidth, 0,
-	XtNborderColor, appres.background,
-	XtNresize, False,
-	NULL);
-#else
-    /* Create the porthole within the container. */
+    /* Add the position counter. */
     if (XpmCreatePixmapFromData(display, XtWindow(container),
 		ci2_xpm, &column_indicator, &shapemask,
 		&attributes) != XpmSuccess) {
@@ -753,7 +738,6 @@ define_widgets(void)
 	XtNbackgroundPixmap, arrow,
 	XtNborderWidth, 0,
 	NULL);
-#endif
 
     /* Add the FEED button. */
     key_init(&feed_key, "FEED", container,
@@ -961,65 +945,9 @@ static void
 set_posw(int c)
 {
     col = c;
-#if 0
-    static char bb[16];
-    static char bp[3];
-    static char bn[3];
 
-    col = c;
-
-    /*
-     * Always display six characters (. is space):
-     *         |
-     *   1: -  '02
-     *   2:  '02'0
-     *   3:  02'04
-     *   4: 2'04'0
-     *  10: 8'10'1
-     *  11: '10'12
-     *  12: 0'12'1
-     *  78: 6'78'7
-     *  79: '78'80
-     *  80: 8'80
-     *  81: 80  -'
-     */
-    if (col >= N_COLS)
-	strcpy(bb, POSW_81);
-    else {
-	int dcol = col + 1;
-
-	switch (dcol) {
-	case 1:
-	    strcpy(bb, "-  ' 2");
-	    break;
-	case 2:
-	    strcpy(bb, " ' 2' ");
-	    break;
-        case 3:
-	    strcpy(bb, "  2' 4");
-	    break;
-	default:
-	    if (dcol % 2) {
-		/* Odd */
-		sprintf(bb, "'%2d'%2d", dcol - 1, dcol + 1);
-	    } else {
-		/* Even */
-		sprintf(bp, "%2d", dcol - 2);
-		sprintf(bn, "%2d", dcol + 2);
-		sprintf(bb, "%c'%2d'%c", bp[1], dcol, bn[0]);
-	    }
-	    break;
-	case 80:
-	    strcpy(bb, "8'80  ");
-	    break;
-	}
-    }
-    strcat(bb, POSW_IND);
-    XtVaSetValues(posw, XtNlabel, bb, NULL);
-#else
     if (col < N_COLS)
 	XtVaSetValues(posw, XtNx, -(col * 14), NULL);
-#endif
 }
 
 /* Go to the next card. */
@@ -1310,9 +1238,6 @@ static void
 queued_invisible(int ignored)
 {
     card_state = C_FLUX;
-#if 0
-    XtVaSetValues(posw, XtNlabel, POSW_81 POSW_IND, NULL);
-#endif
 }
 
 static void
@@ -1328,7 +1253,7 @@ queued_visible(int ignored)
 enum evtype { DUMMY, DATA, MULTI, LEFT, KYBD_RIGHT, HOME,
 	      PAN_RIGHT, PAN_LEFT, PAN_UP, SLAM, NEWCARD,
 	      INVISIBLE, VISIBLE, REL_RIGHT, POWER_ON, PRESS_FEED, PRESS_REL,
-	      EMPTY, SPIN_POS
+	      EMPTY
 };
 void (*eq_fn[])(int) = {
     queued_nothing,
@@ -1349,12 +1274,11 @@ void (*eq_fn[])(int) = {
     queued_press_feed,
     queued_press_rel,
     queued_empty,
-    queued_spin_pos,
 };
 char *eq_name[] = {
     "DUMMY", "DATA", "MULTI", "LEFT", "KYBD_RIGHT", "HOME", "PAN_RIGHT",
     "PAN_LEFT", "PAN_UP", "SLAM", "NEWCARD", "INVISIBLE", "VISIBLE",
-    "REL_RIGHT", "POWER_ON", "PRESS_FEED", "PRESS_REL", "EMPTY", "SPIN_POS"
+    "REL_RIGHT", "POWER_ON", "PRESS_FEED", "PRESS_REL", "EMPTY"
 };
 typedef struct event {
     struct event *next;
@@ -1766,8 +1690,6 @@ do_feed(Boolean keep_sequence)
 	    enq_event(PAN_UP, 0, False, FAST);
     }
     for (i = SLAM_COL; i < SLAM_TARGET_COL; i++) {
-	    if (i == SLAM_TARGET_COL - 4)
-		enq_event(SPIN_POS, 0, False, 0);
 	    enq_event(PAN_RIGHT, 0, False, VERY_FAST);
     }
 
@@ -1813,14 +1735,6 @@ static void
 queued_empty(int ignored)
 {
     card_state = C_EMPTY;
-}
-
-static void
-queued_spin_pos(int ignored)
-{
-#if 0
-    XtVaSetValues(posw, XtNlabel, POSW_INT POSW_IND, NULL);
-#endif
 }
 
 /* Batch processing. */
