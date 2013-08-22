@@ -48,7 +48,8 @@
 #include "save_pressed.xpm"	/* SAVE button */
 #include "drop.xpm"		/* DROP button */
 #include "drop_pressed.xpm"	/* DROP button */
-#include "column_indicator.xpm"	/* column indicator */
+#include "ci2.xpm"	/* column indicator */
+#include "arrow.xpm"		/* arrow */
 #include "x029.bm"		/* icon */
 
 enum {
@@ -570,6 +571,7 @@ define_widgets(void)
     Pixmap pixmap, shapemask;
     Pixmap hole_shapemask;
     Pixmap column_indicator;
+    Pixmap arrow;
     Dimension sx;
     XpmAttributes attributes;
     static char translations[] = "\
@@ -716,7 +718,7 @@ define_widgets(void)
 #else
     /* Create the porthole within the container. */
     if (XpmCreatePixmapFromData(display, XtWindow(container),
-		column_indicator_xpm, &column_indicator, &shapemask,
+		ci2_xpm, &column_indicator, &shapemask,
 		&attributes) != XpmSuccess) {
 	    XtError("XpmCreatePixmapFromData failed");
     }
@@ -730,13 +732,26 @@ define_widgets(void)
 	NULL);
     posw = XtVaCreateManagedWidget(
 	"posw", compositeWidgetClass, posw_porth,
-	XtNwidth, 1172,
+	XtNwidth, 1150,
 	XtNheight, 29,
 	XtNx, 0,
 	XtNy, 0,
 	XtNbackgroundPixmap, column_indicator,
 	XtNborderWidth, 1,
 	XtNborderColor, appres.background,
+	NULL);
+    if (XpmCreatePixmapFromData(display, XtWindow(container), arrow_xpm,
+		&arrow, &shapemask, &attributes) != XpmSuccess) {
+	    XtError("XpmCreatePixmapFromData failed");
+    }
+    ww = XtVaCreateManagedWidget(
+	"arrow", compositeWidgetClass, container,
+	XtNwidth, 19,
+	XtNheight, 29,
+	XtNx, w - BUTTON_GAP - KEY_WIDTH - 2*BUTTON_BW - 19,
+	XtNy, h - CARD_AIR - POWER_HEIGHT - BUTTON_GAP - KEY_HEIGHT,
+	XtNbackgroundPixmap, arrow,
+	XtNborderWidth, 0,
 	NULL);
 #endif
 
@@ -1002,7 +1017,8 @@ set_posw(int c)
     strcat(bb, POSW_IND);
     XtVaSetValues(posw, XtNlabel, bb, NULL);
 #else
-    XtVaSetValues(posw, XtNx, -(col * 14), NULL);
+    if (col < N_COLS)
+	XtVaSetValues(posw, XtNx, -(col * 14), NULL);
 #endif
 }
 
@@ -2002,6 +2018,7 @@ dbg_printf(const char *format, ...)
     va_start(ap, format);
     vfprintf(stdout, format, ap);
     va_end(ap);
+    fflush(stdout);
 }
 
 void
