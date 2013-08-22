@@ -689,14 +689,14 @@ define_widgets(void)
 
     /* Add the save button. */
     key_init(&save_key, "SAVE", container,
-	    BUTTON_GAP + POWER_WIDTH + BUTTON_GAP,
+	    BUTTON_GAP,
 	    h - CARD_AIR - POWER_HEIGHT - BUTTON_GAP - KEY_HEIGHT,
 	    save_xpm, save_pressed_xpm,
 	    save_key_backend);
 
     /* Add the drop button. */
     key_init(&drop_key, "DROP", container,
-	    BUTTON_GAP + POWER_WIDTH + BUTTON_GAP + KEY_WIDTH,
+	    BUTTON_GAP + KEY_WIDTH,
 	    h - CARD_AIR - POWER_HEIGHT - BUTTON_GAP - KEY_HEIGHT,
 	    drop_xpm, drop_pressed_xpm,
 	    drop_key_backend);
@@ -712,7 +712,7 @@ define_widgets(void)
 	XtNwidth, KEY_WIDTH,
 	XtNheight, 29,
 	XtNx, w - BUTTON_GAP - KEY_WIDTH - 2*BUTTON_BW,
-	XtNy, h - CARD_AIR - POWER_HEIGHT - BUTTON_GAP - KEY_HEIGHT,
+	XtNy, h - BUTTON_GAP - POWER_HEIGHT - BUTTON_GAP - SWITCH_HEIGHT - 60 - 29,
 	XtNborderWidth, 0,
 	NULL);
     posw = XtVaCreateManagedWidget(
@@ -734,14 +734,14 @@ define_widgets(void)
 	XtNwidth, 19,
 	XtNheight, 29,
 	XtNx, w - BUTTON_GAP - KEY_WIDTH - 2*BUTTON_BW - 19,
-	XtNy, h - CARD_AIR - POWER_HEIGHT - BUTTON_GAP - KEY_HEIGHT,
+	XtNy, h - BUTTON_GAP - POWER_HEIGHT - BUTTON_GAP - SWITCH_HEIGHT - 60 - 29,
 	XtNbackgroundPixmap, arrow,
 	XtNborderWidth, 0,
 	NULL);
 
     /* Add the FEED button. */
     key_init(&feed_key, "FEED", container,
-	    w - 2 * (BUTTON_GAP + KEY_WIDTH + 2*BUTTON_BW),
+	    w - (BUTTON_GAP + KEY_WIDTH + 2*BUTTON_BW),
 	    h - CARD_AIR - POWER_HEIGHT - BUTTON_GAP - KEY_HEIGHT,
 	    feed_xpm, feed_pressed_xpm,
 	    feed_key_backend);
@@ -750,7 +750,7 @@ define_widgets(void)
 
     /* Add the REL button. */
     key_init(&rel_key, "REL", container,
-	    w - 2 * (BUTTON_GAP + KEY_WIDTH + 2*BUTTON_BW) - KEY_WIDTH,
+	    w - (BUTTON_GAP + KEY_WIDTH + 2*BUTTON_BW + KEY_WIDTH),
 	    h - CARD_AIR - POWER_HEIGHT - BUTTON_GAP - KEY_HEIGHT,
 	    rel_xpm, rel_pressed_xpm,
 	    rel_key_backend);
