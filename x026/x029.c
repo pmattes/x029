@@ -48,7 +48,7 @@
 #include "save_pressed.xpm"	/* SAVE button */
 #include "drop.xpm"		/* DROP button */
 #include "drop_pressed.xpm"	/* DROP button */
-#include "ci2.xpm"	/* column indicator */
+#include "ci2.xpm"		/* column indicator */
 #include "arrow.xpm"		/* arrow */
 #include "x029.bm"		/* icon */
 
@@ -109,6 +109,14 @@ char *bottom_label3[] = { "DUP", NULL, "SEL", NULL, NULL, NULL, NULL, NULL };
 #define BUTTON_WIDTH	45
 #define	BUTTON_HEIGHT	20
 
+#define POSW_INNER_HEIGHT	29
+#define POSW_TFRAME	8
+#define POSW_FRAME	4
+#define POSW_HEIGHT	(POSW_TFRAME + POSW_INNER_HEIGHT + POSW_FRAME)
+#define POSW_INNER_WIDTH	(KEY_WIDTH * 3)
+#define POSW_WIDTH	(POSW_FRAME + POSW_INNER_WIDTH + POSW_FRAME)
+#define ARROW_WIDTH	19
+
 #define KEY_WIDTH	40
 #define KEY_HEIGHT	40
 
@@ -133,10 +141,12 @@ static int		depth;
 static XFontStruct	*ifontinfo;
 Atom			a_delete_me;
 static int		line_number = 100;
+static int		card_count = 0;
 static Pixmap		hole_pixmap;
 
 static Pixmap		flipper_off, flipper_on;
 static Widget		power_widget;
+static Widget		stacker;
 
 int			batchfd = -1;
 
@@ -244,8 +254,9 @@ static XtResource resources[] = {
 /* Fallback resources. */
 static String fallbacks[] = {
     "*ifont:		7x13",
-    "*pos.font:		6x13",
-    "*pos.background:	wheat2",
+    "*depression.background:	grey57",
+    "*stacker.font:	6x13bold",
+    "*stacker.background:	grey92",
     "*dialog*value*font: fixed",
     "*switch.font:  	6x10",
     "*switch.background:  grey92",
@@ -563,6 +574,7 @@ static void
 define_widgets(void)
 {
     Dimension w, h;
+    Dimension posw_x;
     Widget ww;
     XtTranslations t;
     XGCValues xgcv;
@@ -623,11 +635,60 @@ define_widgets(void)
     hole_width = attributes.width;
     hole_height = attributes.height;
     w = card_width + 2*CARD_AIR;
-    h = SWITCH_SKIP + card_height + 2*CARD_AIR + 2*BUTTON_GAP + 2*BUTTON_BW +
+    h = BUTTON_GAP + POSW_HEIGHT +
+	SWITCH_SKIP + card_height + 2*CARD_AIR + 2*BUTTON_GAP + 2*BUTTON_BW +
 	BUTTON_HEIGHT + BUTTON_GAP + POWER_HEIGHT;
     XtVaSetValues(container,
 	XtNwidth, w,
 	XtNheight, h,
+	NULL);
+
+    /* Add the position counter. */
+    if (XpmCreatePixmapFromData(display, XtWindow(container),
+		ci2_xpm, &column_indicator, &shapemask,
+		&attributes) != XpmSuccess) {
+	    XtError("XpmCreatePixmapFromData failed");
+    }
+    posw_x = 25;
+    XtVaCreateManagedWidget(
+	"depression", labelWidgetClass, container,
+	XtNwidth, POSW_WIDTH + ARROW_WIDTH,
+	XtNheight, POSW_HEIGHT,
+	XtNy, 0,
+	XtNx, posw_x,
+	XtNlabel, "",
+	XtNborderWidth, 0,
+	NULL);
+    posw_porth = XtVaCreateManagedWidget(
+	"posw_porthole", portholeWidgetClass, container,
+	XtNwidth, POSW_INNER_WIDTH,
+	XtNheight, POSW_INNER_HEIGHT,
+	XtNx, posw_x + POSW_FRAME + ARROW_WIDTH,
+	XtNy, POSW_TFRAME,
+	XtNborderWidth, 0,
+	NULL);
+    posw = XtVaCreateManagedWidget(
+	"posw", compositeWidgetClass, posw_porth,
+	XtNwidth, 1350,
+	XtNheight, POSW_HEIGHT,
+	XtNx, 0,
+	XtNy, 0,
+	XtNbackgroundPixmap, column_indicator,
+	XtNborderWidth, 1,
+	XtNborderColor, appres.background,
+	NULL);
+    if (XpmCreatePixmapFromData(display, XtWindow(container), arrow_xpm,
+		&arrow, &shapemask, &attributes) != XpmSuccess) {
+	    XtError("XpmCreatePixmapFromData failed");
+    }
+    ww = XtVaCreateManagedWidget(
+	"arrow", compositeWidgetClass, container,
+	XtNwidth, ARROW_WIDTH,
+	XtNheight, POSW_INNER_HEIGHT,
+	XtNx, posw_x + POSW_FRAME,
+	XtNy, POSW_TFRAME,
+	XtNbackgroundPixmap, arrow,
+	XtNborderWidth, 0,
 	NULL);
 
     /* Create the porthole within the container. */
@@ -636,7 +697,7 @@ define_widgets(void)
 	XtNwidth, card_width,
 	XtNheight, card_height,
 	XtNx, CARD_AIR,
-	XtNy, CARD_AIR,
+	XtNy, BUTTON_GAP + POSW_HEIGHT + CARD_AIR,
 	XtNborderWidth, 0,
 	NULL);
 
@@ -694,50 +755,24 @@ define_widgets(void)
 	    save_xpm, save_pressed_xpm,
 	    save_key_backend);
 
+    /* Add the stacker count. */
+    stacker = XtVaCreateManagedWidget(
+	"stacker", labelWidgetClass, container,
+	XtNheight, (KEY_HEIGHT / 2),
+	XtNwidth, KEY_WIDTH,
+	XtNx, BUTTON_GAP,
+	XtNy, h - CARD_AIR - POWER_HEIGHT - BUTTON_GAP - KEY_HEIGHT - BUTTON_GAP - (KEY_HEIGHT / 2),
+	XtNborderWidth, 0,
+	XtNlabel, "0",
+	XtNresize, False,
+	NULL);
+
     /* Add the drop button. */
     key_init(&drop_key, "DROP", container,
 	    BUTTON_GAP + KEY_WIDTH,
 	    h - CARD_AIR - POWER_HEIGHT - BUTTON_GAP - KEY_HEIGHT,
 	    drop_xpm, drop_pressed_xpm,
 	    drop_key_backend);
-
-    /* Add the position counter. */
-    if (XpmCreatePixmapFromData(display, XtWindow(container),
-		ci2_xpm, &column_indicator, &shapemask,
-		&attributes) != XpmSuccess) {
-	    XtError("XpmCreatePixmapFromData failed");
-    }
-    posw_porth = XtVaCreateManagedWidget(
-	"posw_porthole", portholeWidgetClass, container,
-	XtNwidth, KEY_WIDTH,
-	XtNheight, 29,
-	XtNx, w - BUTTON_GAP - KEY_WIDTH - 2*BUTTON_BW,
-	XtNy, h - BUTTON_GAP - POWER_HEIGHT - BUTTON_GAP - SWITCH_HEIGHT - 60 - 29,
-	XtNborderWidth, 0,
-	NULL);
-    posw = XtVaCreateManagedWidget(
-	"posw", compositeWidgetClass, posw_porth,
-	XtNwidth, 1150,
-	XtNheight, 29,
-	XtNx, 0,
-	XtNy, 0,
-	XtNbackgroundPixmap, column_indicator,
-	XtNborderWidth, 1,
-	XtNborderColor, appres.background,
-	NULL);
-    if (XpmCreatePixmapFromData(display, XtWindow(container), arrow_xpm,
-		&arrow, &shapemask, &attributes) != XpmSuccess) {
-	    XtError("XpmCreatePixmapFromData failed");
-    }
-    ww = XtVaCreateManagedWidget(
-	"arrow", compositeWidgetClass, container,
-	XtNwidth, 19,
-	XtNheight, 29,
-	XtNx, w - BUTTON_GAP - KEY_WIDTH - 2*BUTTON_BW - 19,
-	XtNy, h - BUTTON_GAP - POWER_HEIGHT - BUTTON_GAP - SWITCH_HEIGHT - 60 - 29,
-	XtNbackgroundPixmap, arrow,
-	XtNborderWidth, 0,
-	NULL);
 
     /* Add the FEED button. */
     key_init(&feed_key, "FEED", container,
@@ -855,6 +890,7 @@ define_widgets(void)
     XtRealizeWidget(toplevel);
     card_window = XtWindow(cardw);
 
+#if 0
     /* Add the cursor. */
 #define C2H (BUTTON_HEIGHT + 2*BUTTON_GAP + 2*BUTTON_BW + 10)
     ww = XtVaCreateManagedWidget(
@@ -864,6 +900,7 @@ define_widgets(void)
 	XtNx, CARD_AIR + LEFT_PAD + CELL_X((N_COLS / 2) + 2) + 4,
 	XtNy, h-C2H-2 - SWITCH_SKIP - BUTTON_GAP - POWER_HEIGHT,
 	NULL);
+#endif
     XtRealizeWidget(ww);
 }
 
@@ -961,15 +998,20 @@ queued_newcard(int replace)
 
     if (!ccard || !replace) {
 	card_t *c;
+	char label[64];
 
 	c = (card_t *)XtMalloc(sizeof(card_t));
 	c->prev = ccard;
 	c->next = NULL;
-	if (ccard)
+	if (ccard) {
 	    ccard->next = c;
+	    card_count++;
+	}
 	ccard = c;
 	c->seq = line_number;
 	line_number += 10;
+	snprintf(label, sizeof(label), "%d", card_count);
+	XtVaSetValues(stacker, XtNlabel, label, NULL);
     } else if (mode != M_INTERACTIVE) {
 	ccard->seq = line_number;
 	line_number += 10;
