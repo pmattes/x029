@@ -1247,6 +1247,8 @@ queued_kybd_right(int do_click)
 	    do_release(VERY_FAST);
 	    do_feed(False);
 	}
+    } else {
+	flush_typeahead();
     }
 }
 
