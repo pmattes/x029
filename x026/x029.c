@@ -331,6 +331,7 @@ static void queued_power_on(int);
 static void queued_press_feed(int);
 static void queued_press_rel(int);
 static void queued_empty(int);
+static void queued_stack(int);
 
 /* Other forward references. */
 static void define_widgets(void);
@@ -341,6 +342,7 @@ static void enq_delay(void);
 static void do_release(int delay);
 static void batch_fsm(void);
 static void show_key_down(kpkey_t *key);
+static void display_card_count(void);
 
 static void dbg_printf(const char *format, ...);
 
@@ -664,9 +666,10 @@ define_widgets(void)
 	XtNx, POSW_FRAME,
 	XtNy, POSW_TFRAME,
 	XtNborderWidth, 0,
-	XtNlabel, "0000",
+	XtNlabel, "",
 	XtNresize, False,
 	NULL);
+    display_card_count();
 
     /* Add the position counter. */
     if (XpmCreatePixmapFromData(display, XtWindow(container),
@@ -1006,20 +1009,16 @@ queued_newcard(int replace)
 
     if (!ccard || !replace) {
 	card_t *c;
-	char label[64];
 
 	c = (card_t *)XtMalloc(sizeof(card_t));
 	c->prev = ccard;
 	c->next = NULL;
 	if (ccard) {
 	    ccard->next = c;
-	    card_count++;
 	}
 	ccard = c;
 	c->seq = line_number;
 	line_number += 10;
-	snprintf(label, sizeof(label), "%04d", card_count);
-	XtVaSetValues(stacker, XtNlabel, label, NULL);
     } else if (mode != M_INTERACTIVE) {
 	ccard->seq = line_number;
 	line_number += 10;
@@ -1150,9 +1149,39 @@ next_card(card_t *c)
 static void
 save_key_backend(kpkey_t *key)
 {
-    if (power_on && card_in_punch_station) {
+    if (mode == M_INTERACTIVE && power_on) {
 	save_popup();
     }
+}
+
+/* Clear out the stacker after a save. */
+void
+clear_stacker(void)
+{
+    card_t *c;
+    card_t *prev = NULL;
+
+    /*
+     * Free everything but ccard, and free ccard if it isn't in the punch
+     * station.
+     */
+    for (c = ccard; c != NULL; c = prev) {
+	prev = c->prev;
+	if (c == ccard) {
+	    if (card_in_punch_station) {
+		c->prev = NULL;
+		c->next = NULL;
+		continue;
+	    } else {
+		ccard = NULL;
+	    }
+	}
+	free(c);
+    }
+
+    /* Update the card count display. */
+    card_count = 0;
+    display_card_count();
 }
 
 /*
@@ -1290,7 +1319,7 @@ queued_visible(int ignored)
 enum evtype { DUMMY, DATA, MULTI, LEFT, KYBD_RIGHT, HOME,
 	      PAN_RIGHT, PAN_LEFT, PAN_UP, SLAM, NEWCARD,
 	      INVISIBLE, VISIBLE, REL_RIGHT, POWER_ON, PRESS_FEED, PRESS_REL,
-	      EMPTY
+	      EMPTY, STACK
 };
 void (*eq_fn[])(int) = {
     queued_nothing,
@@ -1311,11 +1340,12 @@ void (*eq_fn[])(int) = {
     queued_press_feed,
     queued_press_rel,
     queued_empty,
+    queued_stack
 };
 char *eq_name[] = {
     "DUMMY", "DATA", "MULTI", "LEFT", "KYBD_RIGHT", "HOME", "PAN_RIGHT",
     "PAN_LEFT", "PAN_UP", "SLAM", "NEWCARD", "INVISIBLE", "VISIBLE",
-    "REL_RIGHT", "POWER_ON", "PRESS_FEED", "PRESS_REL", "EMPTY"
+    "REL_RIGHT", "POWER_ON", "PRESS_FEED", "PRESS_REL", "EMPTY", "STACK"
 };
 typedef struct event {
     struct event *next;
@@ -1711,6 +1741,9 @@ do_release(int delay)
 
     /* The punch station is now empty. */
     enq_event(EMPTY, 0, False, 0);
+
+    /* We've saved a new card. */
+    enq_event(STACK, 0, False, 0);
 }
 
 /* Pull a card from the (infinite) hopper into the punch station. */
@@ -1772,6 +1805,22 @@ static void
 queued_empty(int ignored)
 {
     card_state = C_EMPTY;
+}
+
+static void
+display_card_count(void)
+{
+    char label[64];
+
+    snprintf(label, sizeof(label), "%04d", card_count);
+    XtVaSetValues(stacker, XtNlabel, label, NULL);
+}
+
+static void
+queued_stack(int ignored)
+{
+    card_count++;
+    display_card_count();
 }
 
 /* Batch processing. */

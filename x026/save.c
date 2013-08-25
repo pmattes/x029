@@ -115,6 +115,7 @@ save_file_ascii(void)
 	fputc('\n', f);
     }
     fclose(f);
+    clear_stacker();
 }
 
 static void
@@ -164,6 +165,7 @@ save_file_image(void)
 	}
     }
     fclose(f);
+    clear_stacker();
 }
 
 static void
