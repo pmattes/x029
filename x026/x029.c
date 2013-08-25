@@ -1196,12 +1196,16 @@ queued_nothing(int ignored)
 static void
 queued_data(int c)
 {
-    if (card_in_punch_station && col < N_COLS && punch_char(col, c)) {
-	draw_col(col);
+    if (card_in_punch_station && col < N_COLS) {
+	if (punch_char(col, c)) {
+	    draw_col(col);
 #if defined(SOUND) /*[*/
-	loud_click();
+	    loud_click();
 #endif /*]*/
-	queued_kybd_right(0);
+	    queued_kybd_right(0);
+	} else {
+	    XBell(display, 0);
+	}
     }
 }
 
