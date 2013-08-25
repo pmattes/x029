@@ -302,11 +302,11 @@ static int actioncount = XtNumber(actions);
 
 static Boolean power_on = False;
 static enum {
-    C_EMPTY,	/* No card in punch station, no operation pending */
-    C_FLUX,	/* Operation in progress (in or out) */
-    C_PUNCH	/* Card in punch station */
+    C_EMPTY,		/* No card in punch station, no operation pending */
+    C_FLUX,		/* Operation in progress (in or out) */
+    C_REGISTERED	/* Card registered in punch station */
 } card_state = C_EMPTY;
-#define card_in_punch_station	(card_state == C_PUNCH)
+#define CARD_REGISTERED	(card_state == C_REGISTERED)
 
 /* Key press back-ends (xxx_backend). */
 static void save_key_backend(kpkey_t *key);
@@ -343,6 +343,7 @@ static void do_release(int delay);
 static void batch_fsm(void);
 static void show_key_down(kpkey_t *key);
 static void display_card_count(void);
+static void flush_typeahead(void);
 
 static void dbg_printf(const char *format, ...);
 
@@ -558,7 +559,7 @@ toggle_callback(Widget w, XtPointer client_data, XtPointer call_data)
     t->on = !t->on;
     XtVaSetValues(w, XtNbackgroundPixmap, t->on? toggle_on: toggle_off, NULL);
     (void) XtAppAddTimeOut(appcontext, SLOW * 6, unclear_event, NULL);
-    if (card_in_punch_station) {
+    if (CARD_REGISTERED) {
 	do_release(VERY_FAST);
     }
 }
@@ -1127,7 +1128,7 @@ first_card(void)
 
     for (c = ccard; c && c->prev; c = c->prev) {
     }
-    if (card_in_punch_station && c == ccard) {
+    if (CARD_REGISTERED && c == ccard) {
 	return NULL;
     }
     return c;
@@ -1140,7 +1141,7 @@ next_card(card_t *c)
     card_t *n;
 
     n = c->next;
-    if (card_in_punch_station && n == ccard) {
+    if (CARD_REGISTERED && n == ccard) {
 	return NULL;
     }
     return n;
@@ -1168,7 +1169,7 @@ clear_stacker(void)
     for (c = ccard; c != NULL; c = prev) {
 	prev = c->prev;
 	if (c == ccard) {
-	    if (card_in_punch_station) {
+	    if (CARD_REGISTERED) {
 		c->prev = NULL;
 		c->next = NULL;
 		continue;
@@ -1196,7 +1197,7 @@ queued_nothing(int ignored)
 static void
 queued_data(int c)
 {
-    if (card_in_punch_station && col < N_COLS) {
+    if (CARD_REGISTERED && col < N_COLS) {
 	if (punch_char(col, c)) {
 	    draw_col(col);
 #if defined(SOUND) /*[*/
@@ -1226,6 +1227,8 @@ queued_left(int c)
     if (col) {
 	queued_pan_left(0);
 	set_posw(col - 1);
+    } else {
+	flush_typeahead();
     }
 }
 
@@ -1305,15 +1308,15 @@ queued_slam(int ignored)
 }
 
 static void
-queued_invisible(int ignored)
+queued_flux(int ignored)
 {
     card_state = C_FLUX;
 }
 
 static void
-queued_visible(int ignored)
+queued_registered(int ignored)
 {
-    card_state = C_PUNCH;
+    card_state = C_REGISTERED;
     set_posw(0);
 }
 
@@ -1322,7 +1325,7 @@ queued_visible(int ignored)
  */
 enum evtype { DUMMY, DATA, MULTI, LEFT, KYBD_RIGHT, HOME,
 	      PAN_RIGHT, PAN_LEFT, PAN_UP, SLAM, NEWCARD,
-	      INVISIBLE, VISIBLE, REL_RIGHT, POWER_ON, PRESS_FEED, PRESS_REL,
+	      FLUX, REGISTERED, REL_RIGHT, POWER_ON, PRESS_FEED, PRESS_REL,
 	      EMPTY, STACK
 };
 void (*eq_fn[])(int) = {
@@ -1337,8 +1340,8 @@ void (*eq_fn[])(int) = {
     queued_pan_up,
     queued_slam,
     queued_newcard,
-    queued_invisible,
-    queued_visible,
+    queued_flux,
+    queued_registered,
     queued_rel_right,
     queued_power_on,
     queued_press_feed,
@@ -1348,13 +1351,14 @@ void (*eq_fn[])(int) = {
 };
 char *eq_name[] = {
     "DUMMY", "DATA", "MULTI", "LEFT", "KYBD_RIGHT", "HOME", "PAN_RIGHT",
-    "PAN_LEFT", "PAN_UP", "SLAM", "NEWCARD", "INVISIBLE", "VISIBLE",
+    "PAN_LEFT", "PAN_UP", "SLAM", "NEWCARD", "FLUX", "REGISTERED",
     "REL_RIGHT", "POWER_ON", "PRESS_FEED", "PRESS_REL", "EMPTY", "STACK"
 };
 typedef struct event {
     struct event *next;
     enum evtype evtype;
-    unsigned char param;	/* optional */
+    unsigned char param;
+    Boolean interactive;
     int delay;
 } event_t;
 event_t *eq_first, *eq_last;
@@ -1371,6 +1375,10 @@ dump_queue(const char *when)
 	return;
 
     printf("queue(%s):", when);
+    if (eq_first == NULL) {
+	printf(" (empty)\n");
+	return;
+    }
 
     for (e = eq_first; e != NULL; e = e->next) {
 	if (prev == NULL) {
@@ -1378,18 +1386,20 @@ dump_queue(const char *when)
 	    cnt = 1;
 	    continue;
 	}
-	if (prev->evtype == e->evtype && prev->delay == e->delay) {
+	if (prev->evtype == e->evtype && prev->interactive == e->interactive && prev->delay == e->delay) {
 	    cnt++;
 	    continue;
 	}
-	printf(" %s(%d)", eq_name[prev->evtype], prev->delay);
+	printf(" %s(%d)%s", eq_name[prev->evtype], prev->delay,
+		prev->interactive? "*": "");
 	if (cnt > 1)
 	    printf("x%d", cnt);
 	prev = e;
 	cnt = 1;
     }
     if (cnt) {
-	printf(" %s(%d)", eq_name[prev->evtype], prev->delay);
+	printf(" %s(%d)%s", eq_name[prev->evtype], prev->delay,
+		prev->interactive? "*": "");
 	if (cnt > 1)
 	    printf("x%d", cnt);
     }
@@ -1437,20 +1447,17 @@ deq_event(XtPointer data, XtIntervalId *id)
 
 /* Add an event to the back of the queue. */
 static Boolean
-enq_event(enum evtype evtype, unsigned char param, Boolean restricted,
+enq_event(enum evtype evtype, unsigned char param, Boolean interactive,
 	int delay)
 {
     event_t *e;
 
-    if (restricted && eq_count) {
-	XBell(display, 0);
-	return False;
-    }
     if (evtype == DUMMY && delay == 0)
 	return True;
     e = (event_t *)XtMalloc(sizeof(*e));
     e->evtype = evtype;
     e->param = param;
+    e->interactive = interactive;
     e->delay = delay;
 
     e->next = NULL;
@@ -1467,11 +1474,47 @@ enq_event(enum evtype evtype, unsigned char param, Boolean restricted,
     return True;
 }
 
-/* Add a character to the current card. This is an external entry point. */
+/* Flush typeahead events from the queue. */
+static void
+flush_typeahead(void)
+{
+    event_t *e;
+    event_t *prev = NULL;
+    event_t *next;
+
+    for (e = eq_first; e != NULL; e = next) {
+	next = e->next;
+	if (e->interactive) {
+	    dbg_printf("Flush %s(%d)*\n", eq_name[e->evtype], e->delay);
+	    if (prev != NULL) {
+		prev->next = e->next;
+	    } else {
+		eq_first = e->next;
+	    }
+	    if (e->next == NULL) {
+		eq_last = prev;
+	    }
+	    XtFree((XtPointer)e);
+	    eq_count--;
+	    continue;
+	}
+	prev = e;
+    }
+    dump_queue("after flush");
+}
+
+/*
+ * Add a character to the current card. This is an external entry point used
+ * by the paste logic and the batch logic.
+ */
 Boolean
 add_char(char c)
 {
-    return enq_event(DATA, c, False, SLOW);
+    if (power_on && CARD_REGISTERED) {
+	return enq_event(DATA, c, True, SLOW);
+    } else {
+	return False;
+    }
 }
 
 static void
@@ -1494,13 +1537,13 @@ Data_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 
     action_dbg("Data", wid, event, params, num_params);
 
-    if (!power_on || !card_in_punch_station) {
+    if (!power_on || !CARD_REGISTERED) {
 	return;
     }
 
     ll = XLookupString(kevent, buf, 10, &ks, (XComposeStatus *)NULL);
     if (ll == 1) {
-	enq_event(DATA, buf[0] & 0xff, !appres.typeahead, SLOW);
+	enq_event(DATA, buf[0] & 0xff, True, SLOW);
     }
 }
 
@@ -1515,13 +1558,13 @@ MultiPunchData_action(Widget wid, XEvent *event, String *params,
 
     action_dbg("MultiPunchData", wid, event, params, num_params);
 
-    if (!power_on || !card_in_punch_station) {
+    if (!power_on || !CARD_REGISTERED) {
 	return;
     }
 
     ll = XLookupString(kevent, buf, 10, &ks, (XComposeStatus *)NULL);
     if (ll == 1) {
-	enq_event(MULTI, buf[0], !appres.typeahead, SLOW);
+	enq_event(MULTI, buf[0], True, SLOW);
     }
 }
 
@@ -1530,8 +1573,8 @@ Left_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
     action_dbg("Left", wid, event, params, num_params);
 
-    if (power_on && card_in_punch_station) {
-	enq_event(LEFT, 0, !appres.typeahead, SLOW);
+    if (power_on && CARD_REGISTERED) {
+	enq_event(LEFT, 0, True, SLOW);
     }
 }
 
@@ -1540,8 +1583,8 @@ Right_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
     action_dbg("Right", wid, event, params, num_params);
 
-    if (power_on && card_in_punch_station) {
-	enq_event(KYBD_RIGHT, 1, !appres.typeahead, SLOW);
+    if (power_on && CARD_REGISTERED) {
+	enq_event(KYBD_RIGHT, 1, True, SLOW);
     }
 }
 
@@ -1552,13 +1595,13 @@ Home_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 
     action_dbg("Home", wid, event, params, num_params);
 
-    if (power_on && card_in_punch_station) {
-	if (!enq_event(DUMMY, 0, !appres.typeahead, SLOW))
-	    return;
-
+    if (power_on && CARD_REGISTERED) {
+	flush_typeahead();
+	card_state = C_FLUX;
 	for (i = 0; i < col; i++) {
 	    enq_event(HOME, 0, False, FAST);
 	}
+	enq_event(REGISTERED, 0, False, 0);
     }
 }
 
@@ -1570,9 +1613,9 @@ static void
 rel_key_backend(kpkey_t *key)
 {
     dbg_printf("release(%s) eq_count = %d\n",
-	    card_in_punch_station? "card": "no card", eq_count);
+	    CARD_REGISTERED? "card": "no card", eq_count);
 
-    if (power_on && card_in_punch_station) {
+    if (power_on && CARD_REGISTERED) {
 	do_release(VERY_FAST);
 	if (toggles[T_AUTO_FEED].on)
 	    do_feed(False);
@@ -1585,7 +1628,7 @@ Release_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
     action_dbg("Release", wid, event, params, num_params);
 
     show_key_down(&rel_key);
-    if (!power_on || !card_in_punch_station) {
+    if (!power_on || !CARD_REGISTERED) {
 	return;
     }
     rel_key_backend(&rel_key);
@@ -1598,13 +1641,13 @@ Tab_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 
     action_dbg("Tab", wid, event, params, num_params);
 
-    if (power_on && card_in_punch_station) {
-	if (!enq_event(DUMMY, 0, True, SLOW))
-	    return;
-
+    if (power_on && CARD_REGISTERED) {
+	flush_typeahead();
+	card_state = C_FLUX;
 	for (i = col; i < 6; i++) {
 	    enq_event(KYBD_RIGHT, 1, False, SLOW);
 	}
+	enq_event(REGISTERED, 0, False, 0);
     }
 }
 
@@ -1614,16 +1657,16 @@ drop_key_backend(kpkey_t *key)
 {
     int i;
 
-    if (!power_on || !card_in_punch_station) {
+    if (!power_on || !CARD_REGISTERED) {
 	return;
     }
 
+    flush_typeahead();
     card_state = C_FLUX;
 
     /* Scroll the previous card away. */
     for (i = 0; i <= col; i++)
 	enq_event(LEFT, 0, False, FAST);
-    enq_event(INVISIBLE, 0, False, 0);
     for (i = 0; i < N_COLS/2 + 3; i++)
 	enq_event(PAN_LEFT, 0, False, FAST);
 
@@ -1638,7 +1681,7 @@ drop_key_backend(kpkey_t *key)
 static void
 feed_key_backend(kpkey_t *key)
 {
-    if (power_on && !eq_count && !card_in_punch_station) {
+    if (power_on && !eq_count && !CARD_REGISTERED) {
 	do_feed(False);
     }
 }
@@ -1731,16 +1774,17 @@ do_release(int delay)
     int i;
 
     /* The card is now officially invisible. */
+    flush_typeahead();
     card_state = C_FLUX;
 
     /* Space over the remainder of the card. */
     for (i = col; i < N_COLS; i++) {
-	    enq_event(REL_RIGHT, 0, False, delay);
+	enq_event(REL_RIGHT, 0, False, delay);
     }
 
     /* Scroll the card out of the punch station. */
     for (i = 0; i < N_COLS/2 + 10; i++) {
-	    enq_event(PAN_RIGHT, 0, False, delay);
+	enq_event(PAN_RIGHT, 0, False, delay);
     }
 
     /* The punch station is now empty. */
@@ -1768,7 +1812,7 @@ do_feed(Boolean keep_sequence)
     }
 
     /* The punch station is now full. */
-    enq_event(VISIBLE, 0, False, 0);
+    enq_event(REGISTERED, 0, False, 0);
 }
 
 /* Start-up sequence. */
@@ -1905,7 +1949,7 @@ batch_fsm(void)
 	    break;
 
 	case BS_CHAR:
-	    if (!card_in_punch_station) {
+	    if (!CARD_REGISTERED) {
 		/* XXX: It might be in flux? */
 		static Boolean unfed = True;
 
