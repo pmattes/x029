@@ -255,11 +255,13 @@ static XtResource resources[] = {
 /* Fallback resources. */
 static String fallbacks[] = {
     "*ifont:		7x13",
+    "*stackerDepression.background:	grey57",
     "*depression.background:	grey57",
     "*stacker.font:	6x13bold",
-    "*stacker.foreground:	white",
-    "*stacker.background:	grey57",
+    "*stacker.foreground:	black",
+    "*stacker.background:	grey92",
     "*dialog*value*font: fixed",
+    "*powerDepression.background:	grey57",
     "*switch.font:  	6x10",
     "*switch.background:  grey92",
     "*font:		variable",
@@ -645,13 +647,34 @@ define_widgets(void)
 	XtNheight, h,
 	NULL);
 
+    /* Add the stacker count. */
+    XtVaCreateManagedWidget(
+	"stackerDepression", labelWidgetClass, container,
+	XtNwidth, KEY_WIDTH + 2 * POSW_FRAME,
+	XtNheight, POSW_HEIGHT,
+	XtNx, 0,
+	XtNy, 0,
+	XtNlabel, "",
+	XtNborderWidth, 0,
+	NULL);
+    stacker = XtVaCreateManagedWidget(
+	"stacker", labelWidgetClass, container,
+	XtNwidth, KEY_WIDTH,
+	XtNheight, POSW_INNER_HEIGHT,
+	XtNx, POSW_FRAME,
+	XtNy, POSW_TFRAME,
+	XtNborderWidth, 0,
+	XtNlabel, "0000",
+	XtNresize, False,
+	NULL);
+
     /* Add the position counter. */
     if (XpmCreatePixmapFromData(display, XtWindow(container),
 		ci2_xpm, &column_indicator, &shapemask,
 		&attributes) != XpmSuccess) {
 	    XtError("XpmCreatePixmapFromData failed");
     }
-    posw_x = 25;
+    posw_x = KEY_WIDTH + 2 * POSW_FRAME + BUTTON_GAP;
     XtVaCreateManagedWidget(
 	"depression", labelWidgetClass, container,
 	XtNwidth, POSW_WIDTH + ARROW_WIDTH,
@@ -728,6 +751,14 @@ define_widgets(void)
 	NULL);
 
     /* Add the power button. */
+    XtVaCreateManagedWidget(
+	"powerDepression", labelWidgetClass, container,
+	XtNwidth, w,
+	XtNheight, POWER_HEIGHT + 2*CARD_AIR,
+	XtNx, -1,
+	XtNy, h - POWER_HEIGHT - 2*CARD_AIR,
+	XtNlabel, "",
+	NULL);
     if (XpmCreatePixmapFromData(display, XtWindow(container), flipper_on_xpm,
 		    &flipper_on, &shapemask, &attributes) != XpmSuccess) {
 	    XtError("XpmCreatePixmapFromData failed");
@@ -756,18 +787,6 @@ define_widgets(void)
 	    h - CARD_AIR - POWER_HEIGHT - POWER_GAP - KEY_HEIGHT,
 	    save_xpm, save_pressed_xpm,
 	    save_key_backend);
-
-    /* Add the stacker count. */
-    stacker = XtVaCreateManagedWidget(
-	"stacker", labelWidgetClass, container,
-	XtNheight, (KEY_HEIGHT / 2),
-	XtNwidth, KEY_WIDTH,
-	XtNx, BUTTON_GAP,
-	XtNy, h - CARD_AIR - POWER_HEIGHT,
-	XtNborderWidth, 0,
-	XtNlabel, "000",
-	XtNresize, False,
-	NULL);
 
     /* Add the drop button. */
     key_init(&drop_key, "DROP", container,
@@ -999,7 +1018,7 @@ queued_newcard(int replace)
 	ccard = c;
 	c->seq = line_number;
 	line_number += 10;
-	snprintf(label, sizeof(label), "%03d", card_count);
+	snprintf(label, sizeof(label), "%04d", card_count);
 	XtVaSetValues(stacker, XtNlabel, label, NULL);
     } else if (mode != M_INTERACTIVE) {
 	ccard->seq = line_number;
