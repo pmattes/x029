@@ -196,8 +196,6 @@ void
 save_popup(void)
 {
     Widget w;
-    int n;
-    char dialog_label[128];
 
     if (!save_popup_created) {
 	Dimension width, height;
@@ -213,8 +211,8 @@ save_popup(void)
 
 	/* Create the dialog in the popup. */
 	save_dialog = XtVaCreateManagedWidget(
-	    "dialog", dialogWidgetClass,
-	    save_shell,
+	    "dialog", dialogWidgetClass, save_shell,
+	    XtNlabel, "Save FIle Name",
 	    XtNvalue, "",
 	    XtNbackground, get_cabinet(),
 	    NULL);
@@ -266,12 +264,6 @@ save_popup(void)
 
 	save_popup_created = True;
     }
-    n = num_cards();
-    (void) snprintf(dialog_label, sizeof(dialog_label),
-	    "Save File Name (%d card%s)", n, (n == 1)? "": "s");
-    XtVaSetValues(save_dialog,
-	XtNlabel, dialog_label,
-	NULL);
     if (get_cabinet() == XBlackPixel(display, default_screen))
 	XtVaSetValues(XtNameToWidget(save_dialog, XtNlabel), XtNforeground,
 		XWhitePixel(display, default_screen), NULL);

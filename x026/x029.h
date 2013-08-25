@@ -40,7 +40,6 @@ extern cardimg_t ccardimg;
 extern Boolean add_char(char c);
 extern card_t *first_card(void);
 extern card_t *next_card(card_t *c);
-extern int num_cards(void);
 
 extern Pixel get_errcolor(void);
 extern Pixel get_cabinet(void);

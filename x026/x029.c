@@ -1147,19 +1147,6 @@ next_card(card_t *c)
     return n;
 }
 
-/* Return the number of cards. */
-int
-num_cards(void)
-{
-    int i = 0;
-    card_t *c;
-
-    for (c = first_card(); c != NULL; c = next_card(c)) {
-	i++;
-    }
-    return i;
-}
-
 static void
 save_key_backend(kpkey_t *key)
 {
