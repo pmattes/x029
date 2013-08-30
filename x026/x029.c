@@ -117,16 +117,14 @@ char *bottom_label3[] = { "DUP", NULL, "SEL", NULL, NULL, NULL, NULL, NULL };
 #define POSW_WIDTH	(POSW_FRAME + POSW_INNER_WIDTH + POSW_FRAME)
 #define ARROW_WIDTH	19
 
+#define STACKER_WIDTH	43
+
 #define KEY_WIDTH	40
 #define KEY_HEIGHT	40
 
 #define POWER_GAP	10
 #define POWER_WIDTH	30
 #define POWER_HEIGHT	40
-
-#define POSW_81		"80   -"
-#define POSW_INT        " -  ' "
-#define POSW_IND	"\n   ^"
 
 Widget			toplevel;
 Display			*display;
@@ -653,7 +651,7 @@ define_widgets(void)
     /* Add the stacker count. */
     XtVaCreateManagedWidget(
 	"stackerDepression", labelWidgetClass, container,
-	XtNwidth, KEY_WIDTH + 2 * POSW_FRAME,
+	XtNwidth, STACKER_WIDTH + 2 * POSW_FRAME,
 	XtNheight, POSW_HEIGHT,
 	XtNx, 0,
 	XtNy, 0,
@@ -662,7 +660,7 @@ define_widgets(void)
 	NULL);
     stacker = XtVaCreateManagedWidget(
 	"stacker", labelWidgetClass, container,
-	XtNwidth, KEY_WIDTH,
+	XtNwidth, STACKER_WIDTH,
 	XtNheight, POSW_INNER_HEIGHT,
 	XtNx, POSW_FRAME,
 	XtNy, POSW_TFRAME,
@@ -678,7 +676,7 @@ define_widgets(void)
 		&attributes) != XpmSuccess) {
 	    XtError("XpmCreatePixmapFromData failed");
     }
-    posw_x = KEY_WIDTH + 2 * POSW_FRAME + BUTTON_GAP;
+    posw_x = STACKER_WIDTH + 2 * POSW_FRAME + BUTTON_GAP;
     XtVaCreateManagedWidget(
 	"depression", labelWidgetClass, container,
 	XtNwidth, POSW_WIDTH + ARROW_WIDTH,
@@ -1862,7 +1860,7 @@ display_card_count(void)
 {
     char label[64];
 
-    snprintf(label, sizeof(label), "%04d", card_count);
+    snprintf(label, sizeof(label), "-%04d-", card_count);
     XtVaSetValues(stacker, XtNlabel, label, NULL);
 }
 
