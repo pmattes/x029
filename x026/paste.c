@@ -76,7 +76,7 @@ void
 InsertSelection_action(Widget w, XEvent *event, String *params,
 	Cardinal *num_params)
 {
-    int	i;
+    Cardinal i;
     Atom a;
     XButtonEvent *bevent = (XButtonEvent *)event;
 

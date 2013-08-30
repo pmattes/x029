@@ -580,7 +580,6 @@ define_widgets(void)
 {
     Dimension w, h;
     Dimension posw_x;
-    Widget ww;
     XtTranslations t;
     XGCValues xgcv;
     int i;
@@ -708,7 +707,7 @@ define_widgets(void)
 		&arrow, &shapemask, &attributes) != XpmSuccess) {
 	    XtError("XpmCreatePixmapFromData failed");
     }
-    ww = XtVaCreateManagedWidget(
+    (void) XtVaCreateManagedWidget(
 	"arrow", compositeWidgetClass, container,
 	XtNwidth, ARROW_WIDTH,
 	XtNheight, POSW_INNER_HEIGHT,
@@ -842,7 +841,7 @@ define_widgets(void)
 	    NULL);
 	XtAddCallback(toggles[i].w, XtNcallback, toggle_callback,
 		&toggles[i]);
-	ww = XtVaCreateManagedWidget(
+	(void) XtVaCreateManagedWidget(
 	    "switch", labelWidgetClass, container,
 	    XtNwidth, SWITCH_WIDTH,
 	    XtNx, sx + i*(SWITCH_WIDTH + BUTTON_GAP),
@@ -850,7 +849,7 @@ define_widgets(void)
 	    XtNborderWidth, 0,
 	    XtNlabel, top_label[i],
 	    NULL);
-	ww = XtVaCreateManagedWidget(
+	(void) XtVaCreateManagedWidget(
 	    "switch", labelWidgetClass, container,
 	    XtNwidth, SWITCH_WIDTH,
 	    XtNx, sx + i*(SWITCH_WIDTH + BUTTON_GAP),
@@ -859,7 +858,7 @@ define_widgets(void)
 	    XtNlabel, bottom_label1[i],
 	    NULL);
 	if (bottom_label2[i] != NULL)
-	    ww = XtVaCreateManagedWidget(
+	    (void) XtVaCreateManagedWidget(
 		"switch", labelWidgetClass, container,
 		XtNwidth, SWITCH_WIDTH,
 		XtNx, sx + i*(SWITCH_WIDTH + BUTTON_GAP),
@@ -868,7 +867,7 @@ define_widgets(void)
 		XtNlabel, bottom_label2[i],
 		NULL);
 	if (bottom_label3[i] != NULL)
-	    ww = XtVaCreateManagedWidget(
+	    (void) XtVaCreateManagedWidget(
 		"switch", labelWidgetClass, container,
 		XtNwidth, SWITCH_WIDTH,
 		XtNx, sx + i*(SWITCH_WIDTH + BUTTON_GAP),
@@ -1876,7 +1875,7 @@ typedef enum {
     BS_READ,	/* need to read from the file */
     BS_CHAR,	/* need to process a character from the file */
     BS_SPACE,	/* need to space over the rest of the card */
-    BS_EOF,		/* done */
+    BS_EOF	/* done */
 } batch_state_t;
 static const char *bs_name[] = { "READ", "CHAR", "SPACE", "EOF" };
 static batch_state_t bs = BS_READ;

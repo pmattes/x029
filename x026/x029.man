@@ -106,7 +106,9 @@ center;
 c l .
 collins	Collins Radio Corporation
 cmu	Carnegie Mellon University
-ibm	IBM
+ibm	IBM cream
+harvard	Harvard University
+pink	Plain pink
 .TE
 .TP
 \fB-batch\fP \fIfile\fP
