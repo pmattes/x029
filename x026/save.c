@@ -97,8 +97,8 @@ save_file_ascii(void)
 	    for (h = 0; h < 256; h++) {
 		if (h == '\n' || h == '\b')
 			continue;
-		if (charset_xlate(ccharset, h) != NS &&
-		    charset_xlate(ccharset, h) == c->holes[i]) {
+		if (charset_xlate(c->charset, h) != NS &&
+		    charset_xlate(c->charset, h) == c->holes[i]) {
 		    fputc(h, f);
 		    break;
 		}
@@ -148,10 +148,10 @@ save_file_image(void)
 	unsigned char b3[3];
 
 	fprintf(f, "%c%c%c",
-	    0x80 | cardimg_type(ccardimg)[0],
-	    0x80 | cardimg_type(ccardimg)[1] |
-		charset_punch_type(ccharset),
-	    0x80 | cardimg_type(ccardimg)[2]);
+	    0x80 | cardimg_type(c->cardimg)[0],
+	    0x80 | cardimg_type(c->cardimg)[1] |
+		charset_punch_type(c->charset),
+	    0x80 | cardimg_type(c->cardimg)[2]);
 	for (i = 0; i < N_COLS; i++) {
 	    if (i % 2) {
 		b3[1] |= (c->holes[i] >> 8) & 0xf;

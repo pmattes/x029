@@ -20,12 +20,14 @@
 #define CARDIMG_MENU_HEIGHT	44
 
 typedef struct card {
+    struct card *prev;
+    struct card *next;
+    cardimg_t cardimg;
+    charset_t charset;
     unsigned short holes[N_COLS];
     int n_ov[N_COLS];
     unsigned char coltxt[N_COLS][N_OV];
     int seq;
-    struct card *prev;
-    struct card *next;
 } card_t;
 
 extern Widget toplevel;
@@ -34,20 +36,11 @@ extern int default_screen;
 extern Atom a_delete_me;
 extern XtAppContext appcontext;
 
-# if defined(CHARSET_H) /*[*/
-extern charset_t ccharset;
-# endif /*]*/
-# if defined(CARDIMG_H) /*[*/
-extern cardimg_t ccardimg;
-# endif /*]*/
-
 extern Boolean add_char(char c);
 extern card_t *first_card(void);
 extern card_t *next_card(card_t *c);
 extern void clear_stacker(void);
-#if defined(CARDIMG_H) /*[*/
 extern void set_next_card_image(cardimg_t c);
-#endif /*]*/
 
 extern Pixel get_errcolor(void);
 extern Pixel get_cabinet(void);

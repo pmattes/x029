@@ -129,8 +129,6 @@ char *bottom_label3[] = { "DUP", NULL, "SEL", NULL, NULL, NULL, NULL, NULL };
 Widget			toplevel;
 Display			*display;
 int			default_screen;
-charset_t		ccharset = NULL;
-cardimg_t		ccardimg = NULL;
 XtAppContext		appcontext;
 
 static char		*programname;
@@ -147,6 +145,8 @@ static Pixmap		flipper_off, flipper_on;
 static Widget		power_widget;
 static Widget		stacker;
 
+static charset_t	ccharset = NULL;
+static cardimg_t	ccardimg = NULL;
 static cardimg_t	ncardimg = NULL;
 
 int			demofd = -1;
@@ -1050,6 +1050,15 @@ queued_newcard(int replace)
 {
     int i;
 
+    /* Change the card image. */
+    if (ncardimg != NULL && ccardimg != ncardimg) {
+	ccardimg = ncardimg;
+	ncardimg = NULL;
+
+	XtVaSetValues(cardw, XtNbackgroundPixmap,
+		pixmap_for_cardimg(ccardimg, 0), NULL);
+    }
+
     if (mode != M_INTERACTIVE)
 	replace = True;
 
@@ -1069,6 +1078,8 @@ queued_newcard(int replace)
 	ccard->seq = line_number;
 	line_number += 10;
     }
+    ccard->cardimg = ccardimg;
+    ccard->charset = ccharset;
     (void) memset(ccard->coltxt, ' ', sizeof(ccard->coltxt));
     (void) memset(ccard->holes, 0, sizeof(ccard->holes));
     (void) memset(ccard->n_ov, 0, sizeof(ccard->n_ov));
@@ -1079,15 +1090,6 @@ queued_newcard(int replace)
 	for (i = 0; i < 8; i++) {
 	    punch_char(72+i, ln_buf[i]);
 	}
-    }
-
-    /* Change the card image. */
-    if (ncardimg != NULL && ccardimg != ncardimg) {
-	ccardimg = ncardimg;
-	ncardimg = NULL;
-
-	XtVaSetValues(cardw, XtNbackgroundPixmap,
-		pixmap_for_cardimg(ccardimg, 0), NULL);
     }
 }
 
