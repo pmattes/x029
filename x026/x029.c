@@ -147,9 +147,9 @@ static Pixmap		flipper_off, flipper_on;
 static Widget		power_widget;
 static Widget		stacker;
 
-int			batchfd = -1;
+int			demofd = -1;
 
-/* Mode: interactive versus batch. */
+/* Mode: interactive versus demo. */
 typedef enum {
     M_INTERACTIVE,		/* interactive */
     M_BATCH,			/* read from a fixed file */
@@ -186,7 +186,7 @@ typedef struct {
     char	*ifontname;
     char	*charset;
     char	*card;
-    char	*batchfile;
+    char	*demofile;
     Boolean	autonumber;
     Boolean	typeahead;
     Boolean 	remotectl;
@@ -205,7 +205,7 @@ static XrmOptionDescRec options[]= {
     { "-mono",	".cabinet",	XrmoptionNoArg,		"black" },
     { "-charset",	".charset",	XrmoptionSepArg,	NULL },
     { "-card",	".card",	XrmoptionSepArg,	NULL },
-    { "-batch",	".batchFile",	XrmoptionSepArg,	NULL },
+    { "-demo",	".demoFile",	XrmoptionSepArg,	NULL },
     { "-remotectl",	".remoteCtl",	XrmoptionNoArg,		"True" },
     { "-026ftn",	".charset",	XrmoptionNoArg,		"bcd-h" },
     { "-026comm",	".charset",	XrmoptionNoArg,		"bcd-a" },
@@ -239,8 +239,8 @@ static XtResource resources[] = {
       offset(charset), XtRString, NULL },
     { "card", "Card", XtRString, sizeof(String),
       offset(card), XtRString, NULL },
-    { "batchFile", "BatchFile", XtRString, sizeof(String),
-      offset(batchfile), XtRString, NULL },
+    { "demoFile", "DemoFile", XtRString, sizeof(String),
+      offset(demofile), XtRString, NULL },
     { "remoteCtl", "RemoteCtl", XtRBoolean, sizeof(Boolean),
       offset(remotectl), XtRString, "False" },
     { "debug", "Debug", XtRBoolean, sizeof(Boolean),
@@ -338,7 +338,7 @@ static void startup_power(void);
 static void do_feed(Boolean keep_sequence);
 static void enq_delay(void);
 static void do_release(int delay);
-static void batch_fsm(void);
+static void demo_fsm(void);
 static void show_key_down(kpkey_t *key);
 static void display_card_count(void);
 static void flush_typeahead(void);
@@ -373,8 +373,8 @@ usage(void)
   -026comm         Alias for '-charset bcd-a'\n\
   -029             Alias for '-charset 029'\n\
   -EBCDIC          Alias for '-charset ebcdic'\n\
-  -batch <file>    Read text file and punch it (automated display)\n\
-  -batch -         Read stdin and punch it\n\
+  -demo <file>     Read text file and punch it (automated display)\n\
+  -demo -          Read stdin and punch it\n\
   -remotectl       Read stdin incrementally\n\
   -help            Display this text\n");
     exit(1);
@@ -439,24 +439,24 @@ main(int argc, char *argv[])
 	ccharset = default_charset();
     }
 
-    if (appres.batchfile != NULL) {
+    if (appres.demofile != NULL) {
 	if (appres.remotectl) {
-	    fprintf(stderr, "Batchfile and remotectl in conflict, "
+	    fprintf(stderr, "Demofile and remotectl in conflict, "
 			    "ignoring remotectl\n");
 	}
-	if (strcmp(appres.batchfile, "-")) {
-	    batchfd = open(appres.batchfile, O_RDONLY | O_NONBLOCK);
-	    if (batchfd < 0) {
-		perror(appres.batchfile);
+	if (strcmp(appres.demofile, "-")) {
+	    demofd = open(appres.demofile, O_RDONLY | O_NONBLOCK);
+	    if (demofd < 0) {
+		perror(appres.demofile);
 		exit(1);
 	    }
 	} else {
-	    batchfd = fileno(stdin);
+	    demofd = fileno(stdin);
     }
 	mode = M_BATCH;
     } else if (appres.remotectl) {
 	mode = M_REMOTECTL;
-	batchfd = fileno(stdin);
+	demofd = fileno(stdin);
     } else {
 	mode = M_INTERACTIVE;
     }
@@ -480,8 +480,8 @@ main(int argc, char *argv[])
     audio_init();
 #endif /*]*/
 
-    if (mode != M_INTERACTIVE && batchfd == fileno(stdin)) {
-	if (fcntl(batchfd, F_SETFL, fcntl(batchfd, F_GETFL) | O_NONBLOCK) < 0) {
+    if (mode != M_INTERACTIVE && demofd == fileno(stdin)) {
+	if (fcntl(demofd, F_SETFL, fcntl(demofd, F_GETFL) | O_NONBLOCK) < 0) {
 	    perror("fcntl");
 	    exit(1);
 	}
@@ -1433,13 +1433,13 @@ deq_event(XtPointer data, XtIntervalId *id)
 
     /*
      * If there are more events, schedule the next one.
-     * Otherwise, see if the batch FSM needs cranking.
+     * Otherwise, see if the demo FSM needs cranking.
      */
     if (eq_count) {
 	(void) XtAppAddTimeOut(appcontext, eq_first->delay, deq_event, NULL);
     } else {
 	if (mode != M_INTERACTIVE) {
-	    batch_fsm();
+	    demo_fsm();
 	}
     }
 }
@@ -1504,7 +1504,7 @@ flush_typeahead(void)
 
 /*
  * Add a character to the current card. This is an external entry point used
- * by the paste logic and the batch logic.
+ * by the paste logic and the demo logic.
  */
 Boolean
 add_char(char c)
@@ -1870,15 +1870,15 @@ queued_stack(int ignored)
     display_card_count();
 }
 
-/* Batch processing. */
+/* Demo processing. */
 typedef enum {
-    BS_READ,	/* need to read from the file */
-    BS_CHAR,	/* need to process a character from the file */
-    BS_SPACE,	/* need to space over the rest of the card */
-    BS_EOF	/* done */
-} batch_state_t;
+    DS_READ,	/* need to read from the file */
+    DS_CHAR,	/* need to process a character from the file */
+    DS_SPACE,	/* need to space over the rest of the card */
+    DS_EOF	/* done */
+} demo_state_t;
 static const char *bs_name[] = { "READ", "CHAR", "SPACE", "EOF" };
-static batch_state_t bs = BS_READ;
+static demo_state_t bs = DS_READ;
 XtInputId read_id = 0;
 
 /* Input is now readable. */
@@ -1887,14 +1887,14 @@ read_more(XtPointer closure, int *fd, XtInputId *id)
 {
     XtRemoveInput(read_id);
     read_id = 0;
-    batch_fsm();
+    demo_fsm();
 }
 
 /*
- * Crank the batch FSM.
+ * Crank the demo FSM.
  */
 static void
-batch_fsm(void)
+demo_fsm(void)
 {
     static char buf[1024];
     ssize_t nr;
@@ -1903,34 +1903,34 @@ batch_fsm(void)
     char c;
 
     do {
-	dbg_printf("batch_fsm: %s\n", bs_name[bs]);
+	dbg_printf("demo_fsm: %s\n", bs_name[bs]);
 
 	switch (bs) {
 
-	case BS_READ:
+	case DS_READ:
 	    /* Keep munching on the same buffer. */
 	    if (s < buf + rbsize) {
 		dbg_printf(" continuing, %zd more\n", buf + rbsize - s);
 	    } else {
 		/* Read the next card. */
-		nr = read(batchfd, buf, sizeof(buf));
+		nr = read(demofd, buf, sizeof(buf));
 		dbg_printf(" got %zd chars\n", nr);
 		if (nr == 0) {
 		    if (read_id != 0) {
 			XtRemoveInput(read_id);
 			read_id = 0;
 		    }
-		    close(batchfd);
-		    batchfd = -1;
+		    close(demofd);
+		    demofd = -1;
 
 		    /* Next, exit. */
-		    bs = BS_EOF;
+		    bs = DS_EOF;
 		    break;
 		}
 		if (nr < 0) {
 		    if (errno == EWOULDBLOCK) {
 			if (read_id == 0)
-			    read_id = XtAppAddInput(appcontext, batchfd,
+			    read_id = XtAppAddInput(appcontext, demofd,
 				    (XtPointer)XtInputReadMask, read_more,
 				    NULL);
 			return;
@@ -1944,10 +1944,10 @@ batch_fsm(void)
 	    }
 
 	    /* Next, start munching on it. */
-	    bs = BS_CHAR;
+	    bs = DS_CHAR;
 	    break;
 
-	case BS_CHAR:
+	case DS_CHAR:
 	    if (!CARD_REGISTERED) {
 		/* XXX: It might be in flux? */
 		static Boolean unfed = True;
@@ -1975,7 +1975,7 @@ batch_fsm(void)
 		    enq_event(PRESS_REL, 0, False, VERY_SLOW);
 		else
 		    enq_event(PRESS_REL, 0, False, 0);
-		bs = BS_SPACE;
+		bs = DS_SPACE;
 		break;
 	    }
 	    add_char(c);
@@ -1985,7 +1985,7 @@ batch_fsm(void)
 		 *
 		 * Go read some more.
 		 */
-		bs = BS_READ;
+		bs = DS_READ;
 		continue;
 	    }
 	    if (col >= (appres.autonumber? (N_COLS - 1 - 8):
@@ -1999,7 +1999,7 @@ batch_fsm(void)
 	    }
 	    break;
 
-	case BS_SPACE:
+	case DS_SPACE:
 	    dbg_printf(" col = %d\n", col);
 
 	    if (col >= N_COLS - 1) {
@@ -2008,14 +2008,14 @@ batch_fsm(void)
 
 		/*
 		 * In remote control mode, create a new card.
-		 * In batch mode, wait for data before
+		 * In demo mode, wait for data before
 		 * doing it.
 		 */
 		if (mode == M_REMOTECTL) {
 		    do_feed(False);
 		}
 
-		bs = BS_READ;
+		bs = DS_READ;
 		break;
 	    }
 
@@ -2023,7 +2023,7 @@ batch_fsm(void)
 	    add_char(' ');
 	    break;
 
-	case BS_EOF:
+	case DS_EOF:
 	    /* Done. */
 	    do_power_off();
 	    break;

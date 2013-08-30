@@ -62,15 +62,15 @@ The \fISave Images\fP option saves the deck in Douglas Jones's standard
 card deck format (see http://www.cs.uiowa.edu/~jones/cards/index.html for
 details).
 .SH "BATCH AND REMOTE CONTROL MODES"
-The \fB-batch\fP option puts \fBx029\fP in batch mode, reading the text to be
+The \fB-demo\fP option puts \fBx029\fP in demo mode, reading the text to be
 punched from a text file or from standard input. A newline character is
 interpreted as the \fBREL\fP key.
 .LP
 The \fB-remotectl\fP option also causes \fBx029\fP to read text from standard
 input, but it allows the input to be generated incrementally. The basic
-difference between batch and remote-control modes is that a new card is fed
-immedately in remote-control mode, while a card is not fed in batch mode until
-input is available.
+difference between plain demo and remote-control modes is that a new card is
+fed immedately in remote-control mode, while a card is not fed in demo mode
+until input is available.
 .SH "OPTIONS"
 \fBx029\fP is a toolkit-based program, so it understands standard Xt
 options and resources (e.g., \-geom).
@@ -111,14 +111,14 @@ harvard	Harvard University
 pink	Plain pink
 .TE
 .TP
-\fB-batch\fP \fIfile\fP
-Read text file and punch it.
+\fB-demo\fP \fIfile\fP
+Demo mode: Read a text file and punch it.
 .TP
-\fB-batch -\fP
-Read standard input and punch it.
+\fB-demo -\fP
+Demo mode: Read standard input and punch it.
 .TP
 \fB-remotectl\fP
-Read standard input incrementally.
+Demo mode: Read standard input incrementally.
 .TP
 \fB\-026ftn\fP
 Alias for \fB-charset bcd-h\fP.
