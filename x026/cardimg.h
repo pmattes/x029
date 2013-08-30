@@ -19,6 +19,7 @@ typedef struct _fake_cardimg *cardimg_t;
 extern const char *cardimg_name(cardimg_t cd);
 extern const char *cardimg_desc(cardimg_t cd);
 extern char **cardimg_pixmap_source(cardimg_t cd);
+extern char **cardimg_pixmap_menu_source(cardimg_t cd);
 extern unsigned char *cardimg_type(cardimg_t cd);
 
 /*

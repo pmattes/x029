@@ -16,6 +16,9 @@
 # define N_ROWS	12	/* number of rows */
 # define N_OV	10	/* number of overpunches */
 
+#define CARDIMG_MENU_WIDTH	100
+#define CARDIMG_MENU_HEIGHT	44
+
 typedef struct card {
     unsigned short holes[N_COLS];
     int n_ov[N_COLS];
@@ -29,6 +32,7 @@ extern Widget toplevel;
 extern Display *display;
 extern int default_screen;
 extern Atom a_delete_me;
+extern XtAppContext appcontext;
 
 # if defined(CHARSET_H) /*[*/
 extern charset_t ccharset;
@@ -41,6 +45,9 @@ extern Boolean add_char(char c);
 extern card_t *first_card(void);
 extern card_t *next_card(card_t *c);
 extern void clear_stacker(void);
+#if defined(CARDIMG_H) /*[*/
+extern void set_next_card_image(cardimg_t c);
+#endif /*]*/
 
 extern Pixel get_errcolor(void);
 extern Pixel get_cabinet(void);

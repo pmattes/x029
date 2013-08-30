@@ -33,6 +33,7 @@
 #include "x029.h"		/* global definitions for x029 */
 #include "paste.h"		/* paste module */
 #include "save.h"		/* save module */
+#include "cardimg_menu.h"	/* card image module */
 
 #include "hole.xpm"		/* hole image */
 #include "flipper_off.xpm"	/* power switch, off */
@@ -130,9 +131,9 @@ Display			*display;
 int			default_screen;
 charset_t		ccharset = NULL;
 cardimg_t		ccardimg = NULL;
+XtAppContext		appcontext;
 
 static char		*programname;
-static XtAppContext	appcontext;
 static int		root_window;
 static int		card_window;
 static int		depth;
@@ -145,6 +146,8 @@ static Pixmap		hole_pixmap;
 static Pixmap		flipper_off, flipper_on;
 static Widget		power_widget;
 static Widget		stacker;
+
+static cardimg_t	ncardimg = NULL;
 
 int			demofd = -1;
 
@@ -573,6 +576,44 @@ static int scrollw_column;
 static Dimension card_width, card_height;
 static Dimension hole_width, hole_height;
 
+typedef struct {
+    cardimg_t c;
+    Pixmap p;
+} pxcache_t;
+static pxcache_t *pxcache = NULL;
+static int pxcache_count = 0;
+
+static Pixmap
+pixmap_for_cardimg(cardimg_t c, Pixmap p0)
+{
+    int i;
+    Pixmap p, shapemask;
+    XpmAttributes attributes;
+
+    for (i = 0; i < pxcache_count; i++) {
+	if (pxcache[i].c == c) {
+	    return pxcache[i].p;
+	}
+    }
+
+    if (p0 != 0) {
+	p = p0;
+    } else {
+	attributes.valuemask = XpmSize;
+	if (XpmCreatePixmapFromData(display, XtWindow(container),
+		    cardimg_pixmap_source(c), &p, &shapemask,
+		    &attributes) != XpmSuccess) {
+	    XtError("XpmCreatePixmapFromData failed");
+	}
+    }
+    pxcache = (pxcache_t *)XtRealloc((XtPointer)pxcache,
+	    (pxcache_count + 1) * sizeof(pxcache_t));
+    pxcache[pxcache_count].c = c;
+    pxcache[pxcache_count].p = p;
+    pxcache_count++;
+    return p;
+}
+
 /* Set up the keypunch. */
 static void
 define_widgets(void)
@@ -622,12 +663,15 @@ define_widgets(void)
     } else {
 	ccardimg = default_cardimg();
     }
+
     attributes.valuemask = XpmSize;
     if (XpmCreatePixmapFromData(display, XtWindow(container),
 		cardimg_pixmap_source(ccardimg), &pixmap, &shapemask,
 		&attributes) != XpmSuccess) {
 	XtError("XpmCreatePixmapFromData failed");
     }
+    (void) pixmap_for_cardimg(ccardimg, pixmap);
+
     card_width = attributes.width;
     card_height = attributes.height;
     attributes.valuemask = XpmSize;
@@ -715,6 +759,11 @@ define_widgets(void)
 	XtNbackgroundPixmap, arrow,
 	XtNborderWidth, 0,
 	NULL);
+
+    /* Create the card image menu. */
+    cardimg_menu_init(ccardimg, container,
+	    w - BUTTON_GAP - CARDIMG_MENU_WIDTH,
+	    BUTTON_GAP + POSW_HEIGHT + CARD_AIR + card_height + CARD_AIR);
 
     /* Create the porthole within the container. */
     porth = XtVaCreateManagedWidget(
@@ -1030,6 +1079,15 @@ queued_newcard(int replace)
 	for (i = 0; i < 8; i++) {
 	    punch_char(72+i, ln_buf[i]);
 	}
+    }
+
+    /* Change the card image. */
+    if (ncardimg != NULL && ccardimg != ncardimg) {
+	ccardimg = ncardimg;
+	ncardimg = NULL;
+
+	XtVaSetValues(cardw, XtNbackgroundPixmap,
+		pixmap_for_cardimg(ccardimg, 0), NULL);
     }
 }
 
@@ -2095,4 +2153,10 @@ action_dbg(const char *name, Widget wid, XEvent *event, String *params,
 	printf(", %s", params[i]);
     }
     printf(")\n");
+}
+
+void
+set_next_card_image(cardimg_t c)
+{
+    ncardimg = c;
 }
