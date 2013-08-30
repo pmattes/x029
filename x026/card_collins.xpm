@@ -1,5 +1,5 @@
 /* XPM */
-static char * collins_xpm[] = {
+static char * card_collins_xpm[] = {
 "747 331 258 2",
 "  	c None",
 ". 	c #EBEBEB",

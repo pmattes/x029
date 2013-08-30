@@ -1,5 +1,5 @@
 /* XPM */
-static char * pink_xpm[] = {
+static char * card_pink_xpm[] = {
 "747 331 25751 3",
 "   	c #EBEBEB",
 ".  	c #FCE3ED",

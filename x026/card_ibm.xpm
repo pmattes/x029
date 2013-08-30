@@ -1,5 +1,5 @@
 /* XPM */
-static char * ibm_xpm[] = {
+static char * card_ibm_xpm[] = {
 "747 331 13815 3",
 "   	c #EBEBEB",
 ".  	c #EDEEED",

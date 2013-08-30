@@ -27,13 +27,12 @@
 #include <X11/Xaw/Porthole.h>
 #include <X11/xpm.h>
 
-#include "jones.h"
-#include "charset.h"
-#include "cardimg.h"
-#include "x029.h"
-
-#include "paste.h"
-#include "save.h"
+#include "jones.h"		/* file format definitions */
+#include "charset.h"		/* character set module */
+#include "cardimg.h"		/* card image module */
+#include "x029.h"		/* global definitions for x029 */
+#include "paste.h"		/* paste module */
+#include "save.h"		/* save module */
 
 #include "hole.xpm"		/* hole image */
 #include "flipper_off.xpm"	/* power switch, off */

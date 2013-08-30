@@ -1,5 +1,5 @@
 /* XPM */
-static char * harvard_xpm[] = {
+static char * card_harvard_xpm[] = {
 "747 331 31872 3",
 "   	c #EBEBEB",
 ".  	c #D1CCC4",
