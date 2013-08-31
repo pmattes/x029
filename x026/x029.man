@@ -34,8 +34,9 @@ When \fBx029\fP is started, a \fBFEED\fP press is assumed. Note that there is
 no pre-punch station on \fBx029\fP, so cards go directly from the hopper to
 the punch station.
 .LP
-There is a \fBDrop\fP button to discard the card in the punch station; it will
-be replaced with a blank card. (There is no such button on a real 029.)
+The blue \fBDROP\fP key will discard the card in the punch station, and if
+Auto-Feed is on, replace it with a blank card.
+(There is no such key on a real 029.)
 .LP
 There is a row of toggle switches at the bottom of the window. Some are (for
 now) just for show, but several of them have real functions:
@@ -55,12 +56,20 @@ text will be printed for each punch; when it is off, it will not.
 When toggled, the card in the punch station will be released, and no new card
 will be fed in, regardless of the state of the \fBAUTO FEED\fP switch.
 .LP
-The virtual card deck can be saved in one of two ways.
+The virtual card deck can be saved in one of two ways via the blue \fBSAVE\fP
+key.
 The \fISave Ascii\fP option saves the deck as ASCII (actually ISO 8859-1) text,
 with multi-punched columns implemented as backspaces.
 The \fISave Images\fP option saves the deck in Douglas Jones's standard
 card deck format (see http://www.cs.uiowa.edu/~jones/cards/index.html for
 details).
+.LP
+The character set and card image can be changed on the fly via buttons under
+the punch station.
+Note that the character set cannot be changed when the card in the punch
+station has one or more punches in it, and that changing the card image changes
+the type of the next card fed from the hopper, not the card currently in the
+punch station.
 .SH "BATCH AND REMOTE CONTROL MODES"
 The \fB-demo\fP option puts \fBx029\fP in demo mode, reading the text to be
 punched from a text file or from standard input. A newline character is
@@ -119,6 +128,9 @@ Demo mode: Read standard input and punch it.
 .TP
 \fB-remotectl\fP
 Demo mode: Read standard input incrementally.
+.TP
+\fB-empty\fP
+Start out empty, instead of automatically feeding the first card.
 .TP
 \fB\-026ftn\fP
 Alias for \fB-charset bcd-h\fP.

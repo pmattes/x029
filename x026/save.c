@@ -214,7 +214,7 @@ save_popup(void)
 	/* Create the dialog in the popup. */
 	save_dialog = XtVaCreateManagedWidget(
 	    "dialog", dialogWidgetClass, save_shell,
-	    XtNlabel, "Save FIle Name",
+	    XtNlabel, "Save File Name",
 	    XtNvalue, "",
 	    XtNbackground, get_cabinet(),
 	    NULL);

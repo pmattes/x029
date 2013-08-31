@@ -193,6 +193,7 @@ typedef struct {
     Boolean	autonumber;
     Boolean	typeahead;
     Boolean 	remotectl;
+    Boolean	empty;
     Boolean	help;
     Boolean 	debug;
 } AppRes, *AppResptr;
@@ -201,22 +202,21 @@ static AppRes appres;
 
 /* Command-line options. */
 static XrmOptionDescRec options[]= {
-    { "-ifont",	".ifont",	XrmoptionSepArg,	NULL },
+    { "-ifont",		".ifont",	XrmoptionSepArg,	NULL },
     { "-nonumber",	".autoNumber",  XrmoptionNoArg,		"False" },
     { "-number",	".autoNumber",  XrmoptionNoArg,		"True" },
     { "-typeahead",	".typeahead",	XrmoptionNoArg,		"True" },
-    { "-mono",	".cabinet",	XrmoptionNoArg,		"black" },
     { "-charset",	".charset",	XrmoptionSepArg,	NULL },
-    { "-card",	".card",	XrmoptionSepArg,	NULL },
-    { "-demo",	".demoFile",	XrmoptionSepArg,	NULL },
+    { "-card",		".card",	XrmoptionSepArg,	NULL },
+    { "-demo",		".demoFile",	XrmoptionSepArg,	NULL },
     { "-remotectl",	".remoteCtl",	XrmoptionNoArg,		"True" },
+    { "-empty",		".empty", 	XrmoptionNoArg,		"True" },
     { "-026ftn",	".charset",	XrmoptionNoArg,		"bcd-h" },
     { "-026comm",	".charset",	XrmoptionNoArg,		"bcd-a" },
-    { "-029",	".charset",	XrmoptionNoArg,		"029" },
+    { "-029",		".charset",	XrmoptionNoArg,		"029" },
     { "-EBCDIC",	".charset",	XrmoptionNoArg,		"ebcdic" },
-    { "-debug",	".debug",	XrmoptionNoArg,		"True" },
-    
-    { "-help",	".help",	XrmoptionNoArg,		"True" },
+    { "-debug",		".debug",	XrmoptionNoArg,		"True" },
+    { "-help",		".help",	XrmoptionNoArg,		"True" },
 };
 
 /* Resource list. */
@@ -246,6 +246,8 @@ static XtResource resources[] = {
       offset(demofile), XtRString, NULL },
     { "remoteCtl", "RemoteCtl", XtRBoolean, sizeof(Boolean),
       offset(remotectl), XtRString, "False" },
+    { "empty", "Empty", XtRBoolean, sizeof(Boolean),
+      offset(empty), XtRString, "False" },
     { "debug", "Debug", XtRBoolean, sizeof(Boolean),
       offset(debug), XtRString, "False" },
     { "help", "Help", XtRBoolean, sizeof(Boolean),
@@ -382,6 +384,7 @@ usage(void)
   -demo <file>     Read text file and punch it (automated display)\n\
   -demo -          Read stdin and punch it\n\
   -remotectl       Read stdin incrementally\n\
+  -empty           Don't feed in a card at start-up\n\
   -help            Display this text\n");
     exit(1);
 }
@@ -493,7 +496,7 @@ main(int argc, char *argv[])
 	}
     }
 
-    if (mode == M_INTERACTIVE || mode == M_REMOTECTL) {
+    if ((mode == M_INTERACTIVE || mode == M_REMOTECTL) && !appres.empty) {
 	startup_power_feed();
     } else {
 	startup_power();
