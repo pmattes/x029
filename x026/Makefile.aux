@@ -11,11 +11,13 @@ SOURCES = cardimg.c charset.c paste.c save.c x029.c cardimg_menu.c
 HEADERS = cardimg.h charset.h jones.h paste.h save.h x029.h cardimg_menu.h
 CARDS = card_cmu.xpm card_collins.xpm card_harvard.xpm card_ibm.xpm \
 	card_pink.xpm
+CARD_MENU = cardmenu_cmu.xpm cardmenu_collins.xpm cardmenu_harvard.xpm \
+	    cardmenu_ibm.xpm cardmenu_pink.xpm
 KEYS = drop_pressed.xpm drop.xpm feed_pressed.xpm feed.xpm rel_pressed.xpm \
 	rel.xpm save_pressed.xpm save.xpm 
 MISC_IMAGES = x029.bm flipper_off.xpm flipper_on.xpm hole.xpm off60.xpm \
-	on60.xpm
-IMAGES = $(CARDS) $(KEYS) $(MISC_IMAGES)
+	on60.xpm charset.xpm
+IMAGES = $(CARDS) $(CARDMENU) $(KEYS) $(MISC_IMAGES)
 MISC = Imakefile x029.man README
 FILES = $(SOURCES) $(HEADERS) $(IMAGES) $(MISC)
 

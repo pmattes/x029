@@ -33,7 +33,8 @@
 #include "x029.h"		/* global definitions for x029 */
 #include "paste.h"		/* paste module */
 #include "save.h"		/* save module */
-#include "cardimg_menu.h"	/* card image module */
+#include "cardimg_menu.h"	/* card image menu */
+#include "charset_menu.h"	/* character set menu */
 
 #include "hole.xpm"		/* hole image */
 #include "flipper_off.xpm"	/* power switch, off */
@@ -296,7 +297,10 @@ static XtActionsRec actions[] = {
     { "Right",		Right_action },
     { "Tab",		Tab_action },
     { "InsertSelection", InsertSelection_action },
-    { "Confirm",	Confirm_action }
+    { "Confirm",	Confirm_action },
+    { "Hover",		Hover_action },
+    { "Hover2",		Hover2_action },
+    { "UnHover",	UnHover_action }
 };
 static int actioncount = XtNumber(actions);
 
@@ -763,6 +767,11 @@ define_widgets(void)
     /* Create the card image menu. */
     cardimg_menu_init(ccardimg, container,
 	    w - BUTTON_GAP - CARDIMG_MENU_WIDTH,
+	    BUTTON_GAP + POSW_HEIGHT + CARD_AIR + card_height + CARD_AIR);
+
+    /* Create the character set menu. */
+    charset_menu_init(ccharset, container,
+	    w - BUTTON_GAP - CARDIMG_MENU_WIDTH - BUTTON_GAP - CARDIMG_MENU_WIDTH,
 	    BUTTON_GAP + POSW_HEIGHT + CARD_AIR + card_height + CARD_AIR);
 
     /* Create the porthole within the container. */
@@ -2111,6 +2120,12 @@ get_foreground(void)
     return appres.foreground;
 }
 
+charset_t
+get_charset(void)
+{
+    return ccharset;
+}
+
 /* Debug printing. */
 static void
 dbg_printf(const char *format, ...)
@@ -2161,4 +2176,33 @@ void
 set_next_card_image(cardimg_t c)
 {
     ncardimg = c;
+}
+
+static Boolean
+card_is_blank(void)
+{
+    int i;
+
+    if (!ccard) {
+	return True;
+    }
+    for (i = 0; i < N_COLS; i++) {
+	if (ccard->holes[i]) {
+	    return False;
+	}
+    }
+    return True;
+}
+
+int
+set_charset(charset_t c)
+{
+    if (card_state != C_EMPTY && !card_is_blank()) {
+	return -1;
+    }
+    ccharset = c;
+    if (ccard != NULL) {
+	ccard->charset = c;
+    }
+    return 0;
 }

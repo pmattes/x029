@@ -277,7 +277,7 @@ static struct charset charsets[] = {
       }
     },
     /* DEC 026 with control characters and lowercase. */
-    { "dec026-full", "DEC 026 with lowercase and control chars",
+    { "xdec026", "DEC 026 with lowercase and control chars",
 	PTYPE_026_FORTRAN,
       {
         05403, 04401, 04201, 04101, 00005, 01023, 01013, 01007, 
@@ -315,7 +315,7 @@ static struct charset charsets[] = {
       }
     },
     /* DEC 029 with control characters and lowercase. */
-    { "dec029-full", "DEC 029 with lowercase and control chars", PTYPE_029,
+    { "xdec029", "DEC 029 with lowercase and control chars", PTYPE_029,
       {
         05403, 04401, 04201, 04101, 00005, 01023, 01013, 01007, 
         02011, 04021, 01021, 04103, 04043, 04023, 04013, 04007, 

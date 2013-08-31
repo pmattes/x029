@@ -39,13 +39,19 @@ static cmp_t *cmp = NULL;
 static int num_entries = 0;
 static Widget cardimg_button;
 static int current_ix = 0;
-static XtIntervalId cardimg_id;
 
-static void
-cardimg_blank(XtPointer data, XtIntervalId *id)
+/* Mouse-over action: display the name. */
+void
+Hover_action(Widget w, XEvent *event, String *params, Cardinal *num_params)
 {
-    XtVaSetValues(cardimg_button, XtNlabel, "", NULL);
-    cardimg_id = 0;
+    XtVaSetValues(w, XtNlabel, cardimg_name(cmp[current_ix].c), NULL);
+}
+
+/* Mouse-leave action: display just the image. */
+void
+UnHover_action(Widget w, XEvent *event, String *params, Cardinal *num_params)
+{
+    XtVaSetValues(w, XtNlabel, "", NULL);
 }
 
 static void
@@ -60,12 +66,6 @@ cardimg_button_callback(Widget w, XtPointer client_data, XtPointer call_data)
 
     /* Change the next image in the hopper. */
     set_next_card_image(cmp[current_ix].c);
-
-    /* Make the label disappear later. */
-    if (cardimg_id != 0) {
-	XtRemoveTimeOut(cardimg_id);
-    }
-    cardimg_id = XtAppAddTimeOut(appcontext, 500, cardimg_blank, NULL);
 }
 
 void
@@ -75,6 +75,7 @@ cardimg_menu_init(cardimg_t current_cardimg, Widget container, Dimension x,
     cardimg_t c;
     Pixmap shapemask;
     XpmAttributes attributes;
+    XtTranslations table;
 
     /* Set up the pixmaps for the menu. */
     attributes.valuemask = XpmSize;
@@ -106,4 +107,8 @@ cardimg_menu_init(cardimg_t current_cardimg, Widget container, Dimension x,
 	    XtNresize, False,
 	    NULL);
     XtAddCallback(cardimg_button, XtNcallback, cardimg_button_callback, NULL);
+
+    table = XtParseTranslationTable("<EnterWindow>: Hover()\n\
+<LeaveWindow>: UnHover()");
+    XtOverrideTranslations(cardimg_button, table);
 }

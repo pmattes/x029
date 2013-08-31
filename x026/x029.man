@@ -95,8 +95,8 @@ bcd-a	026 commercial
 1401	IBM 1401
 dec026	DEC 026 ASCII
 dec029	DEC 029 ASCII
-dec026-full	DEC 026 with lowercase and control chars
-dec029-full	DEC 029 with lowercase and control chars
+xdec026	DEC 026 with lowercase and control chars
+xdec029	DEC 029 with lowercase and control chars
 .TE
 .TP
 \fB\-card\fP \fIname\fP

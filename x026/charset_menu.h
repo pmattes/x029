@@ -6,18 +6,16 @@
  *   both that copyright notice and this permission notice appear in
  *   supporting documentation.
  *
- * x029 card image menu.
+ * x029 character set menu.
  */
 
-#if !defined(CARDIMG_MENU_H) /*[*/
-# define CARDIMG_MENU_H 1
+#if !defined(CHARSET_MENU_H) /*[*/
+# define CHARSET_MENU_H 1
 
-extern void cardimg_menu_init(cardimg_t current_cardimg, Widget container,
+extern void charset_menu_init(charset_t current_charset, Widget container,
 	Dimension x, Dimension y);
 
-extern void Hover_action(Widget w, XEvent *event, String *params,
-	Cardinal *num_params);
-extern void UnHover_action(Widget w, XEvent *event, String *params,
+extern void Hover2_action(Widget w, XEvent *event, String *params,
 	Cardinal *num_params);
 
 #endif /*]*/

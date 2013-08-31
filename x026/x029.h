@@ -41,10 +41,12 @@ extern card_t *first_card(void);
 extern card_t *next_card(card_t *c);
 extern void clear_stacker(void);
 extern void set_next_card_image(cardimg_t c);
+extern int set_charset(charset_t c);
 
 extern Pixel get_errcolor(void);
 extern Pixel get_cabinet(void);
 extern Pixel get_foreground(void);
+extern charset_t get_charset(void);
 
 extern void action_dbg(const char *name, Widget wid, XEvent *event,
 	String *params, Cardinal *num_params);
