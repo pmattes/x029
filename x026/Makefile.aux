@@ -4,11 +4,13 @@ all:
 	@echo "Must pick a specific make target."
 	@exit 1
 
-VER=2.0
+VER=2.1
 DIR=x029-$(VER)
 
-SOURCES = cardimg.c charset.c paste.c save.c x029.c cardimg_menu.c
-HEADERS = cardimg.h charset.h jones.h paste.h save.h x029.h cardimg_menu.h
+SOURCES = cardimg.c charset.c paste.c save.c x029.c cardimg_menu.c \
+	charset_menu.c
+HEADERS = cardimg.h charset.h jones.h paste.h save.h x029.h cardimg_menu.h \
+	charset_menu.h
 CARDS = card_cmu.xpm card_collins.xpm card_harvard.xpm card_ibm.xpm \
 	card_pink.xpm
 CARD_MENU = cardmenu_cmu.xpm cardmenu_collins.xpm cardmenu_harvard.xpm \
@@ -16,12 +18,12 @@ CARD_MENU = cardmenu_cmu.xpm cardmenu_collins.xpm cardmenu_harvard.xpm \
 KEYS = drop_pressed.xpm drop.xpm feed_pressed.xpm feed.xpm rel_pressed.xpm \
 	rel.xpm save_pressed.xpm save.xpm 
 MISC_IMAGES = x029.bm flipper_off.xpm flipper_on.xpm hole.xpm off60.xpm \
-	on60.xpm charset.xpm
-IMAGES = $(CARDS) $(CARDMENU) $(KEYS) $(MISC_IMAGES)
+	on60.xpm charset.xpm ci2.xpm arrow.xpm
+IMAGES = $(CARDS) $(CARD_MENU) $(KEYS) $(MISC_IMAGES)
 MISC = Imakefile x029.man README
 FILES = $(SOURCES) $(HEADERS) $(IMAGES) $(MISC)
 
-x029-2.0-src.tgz: $(FILES)
+x029-$(VER)-src.tgz: $(FILES)
 	rm -rf $(DIR)
 	mkdir $(DIR)
 	for i in $(FILES); do ln -s ../$$i $(DIR)/$$i; done
