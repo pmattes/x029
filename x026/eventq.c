@@ -42,6 +42,7 @@ typedef struct event {
     unsigned char param;
     Boolean interactive;
     int delay;
+    int count;
 } event_t;
 
 int eq_count;
@@ -109,8 +110,6 @@ static void
 dump_queue(const char *when)
 {
     event_t *e = NULL;
-    event_t *prev = NULL;
-    int cnt = 0;
 
     if (!debugging()) {
 	return;
@@ -123,28 +122,10 @@ dump_queue(const char *when)
     }
 
     for (e = eq_first; e != NULL; e = e->next) {
-	if (prev == NULL) {
-	    prev = e;
-	    cnt = 1;
-	    continue;
-	}
-	if (prev->evtype == e->evtype && prev->interactive == e->interactive &&
-		prev->delay == e->delay) {
-	    cnt++;
-	    continue;
-	}
-	printf(" %s(%d)%s", eq_name[prev->evtype], prev->delay,
-		prev->interactive? "*": "");
-	if (cnt > 1)
-	    printf("x%d", cnt);
-	prev = e;
-	cnt = 1;
-    }
-    if (cnt) {
-	printf(" %s(%d)%s", eq_name[prev->evtype], prev->delay,
-		prev->interactive? "*": "");
-	if (cnt > 1)
-	    printf("x%d", cnt);
+	printf(" %s(%d)%s", eq_name[e->evtype], e->delay,
+		e->interactive? "*": "");
+	if (e->count > 1)
+	    printf("x%d", e->count);
     }
     printf("\n");
 }
@@ -156,6 +137,7 @@ deq_event(XtPointer data, XtIntervalId *id)
     event_t *e;
     struct timeval tv;
     long waited;
+    Boolean complete = False;
 
     assert(data == (XtPointer)eq_first);
     assert(eq_count);
@@ -172,17 +154,22 @@ deq_event(XtPointer data, XtIntervalId *id)
 
     /* Dequeue it. */
     e = eq_first;
-    eq_first = e->next;
-    if (eq_first == NULL)
-	eq_last = NULL;
-    --eq_count;
+    if (e->count-- < 2) {
+	eq_first = e->next;
+	if (eq_first == NULL)
+	    eq_last = NULL;
+	complete = True;
+	--eq_count;
+    }
 
     /* Run it. */
     dbg_printf("run %s(%d)\n", eq_name[e->evtype], e->delay);
     (*eq_fn[e->evtype])(e->param);
 
     /* Free it. */
-    XtFree((XtPointer)e);
+    if (complete) {
+	XtFree((XtPointer)e);
+    }
     e = NULL;
 
     /*
@@ -201,19 +188,28 @@ deq_event(XtPointer data, XtIntervalId *id)
 }
 
 /* Add an event to the back of the queue. */
-Boolean
+void
 enq_event(enum evtype evtype, unsigned char param, Boolean interactive,
 	int delay)
 {
     event_t *e;
 
-    if (evtype == DUMMY && delay == 0)
-	return True;
+    if (eq_last != NULL &&
+	eq_last->evtype == evtype &&
+	eq_last->param == param &&
+	eq_last->interactive == interactive &&
+	eq_last->delay == delay) {
+	
+	eq_last->count++;
+	return;
+    }
+
     e = (event_t *)XtMalloc(sizeof(*e));
     e->evtype = evtype;
     e->param = param;
     e->interactive = interactive;
     e->delay = delay;
+    e->count = 1;
 
     e->next = NULL;
     if (eq_last != NULL)
@@ -230,7 +226,6 @@ enq_event(enum evtype evtype, unsigned char param, Boolean interactive,
 	(void) XtAppAddTimeOut(appcontext, delay, deq_event, (XtPointer)e);
 	to_set = True;
     }
-    return True;
 }
 
 /* Flush typeahead events from the queue. */

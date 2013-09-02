@@ -68,7 +68,7 @@ extern eq_fn_t queued_OFF;
 extern eq_fn_t queued_CLEAR_SEQ;
 
 /* Add an event to the back of the queue. */
-extern Boolean enq_event(enum evtype evtype, unsigned char param,
+extern void enq_event(enum evtype evtype, unsigned char param,
 	Boolean interactive, int delay);
 
 /* Flush typeahead events from the queue. */

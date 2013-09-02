@@ -1475,7 +1475,8 @@ Boolean
 add_char(char c)
 {
     if (power_on && CARD_REGISTERED) {
-	return enq_event(DATA, c, True, SLOW);
+	enq_event(DATA, c, True, SLOW);
+	return True;
     } else {
 	return False;
     }
@@ -1484,7 +1485,7 @@ add_char(char c)
 static void
 enq_delay(void)
 {
-    (void) enq_event(DUMMY, 0, False, VERY_SLOW);
+    enq_event(DUMMY, 0, False, VERY_SLOW);
 }
 
 /*
