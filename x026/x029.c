@@ -234,7 +234,7 @@ static XtResource resources[] = {
     { XtNbackground, XtCBackground, XtRPixel, sizeof(Pixel),
       offset(background), XtRString, "XtDefaultBackground" },
     { "cabinet", "Cabinet", XtRPixel, sizeof(Pixel),
-      offset(cabinet), XtRString, "grey92" },
+      offset(cabinet), XtRString, "grey75" },
     { "cardColor", "CardColor", XtRPixel, sizeof(Pixel),
       offset(cardcolor), XtRString, "ivory" },
     { "errColor", "ErrColor", XtRPixel, sizeof(Pixel),
@@ -267,19 +267,22 @@ static XtResource resources[] = {
 /* Fallback resources. */
 static String fallbacks[] = {
     "*ifont:		7x13",
-    "*stackerDepression.background:	grey57",
-    "*depression.background:	grey57",
+    "*stackerDepression.background:	grey38",	/* good */
+    "*depression.background:		grey38",
     "*stacker.font:	6x13bold",
     "*stacker.foreground:	black",
-    "*stacker.background:	grey92",
+    "*stacker.background:		grey92",	/* good */
     "*dialog*value*font: fixed",
-    "*powerDepression.background:	grey57",
+    "*base.background:	grey57",	/* good */
     "*switch.font:  	6x10",
-    "*switch.background:  grey92",
+    "*switch.background:  		grey92",	/* good */
     "*font:		variable",
-    "*cabinet:		grey92",
-    "*cardColor:	ivory",
-    "*save.dialog.background:	grey92",
+    "*cabinet:				grey75",	/* good */
+    "*cardColor:	ivory", /* nonsense? */
+    "*case.background:			grey92",	/* good */
+    "*case.borderColor: ivory1",			/* good */
+    "*keyboard.background:		grey10",
+    "*save.dialog.background:		grey92",	/* good */
     NULL
 };
 
@@ -797,19 +800,6 @@ define_widgets(void)
 	XtNborderWidth, 0,
 	NULL);
 
-    /* Create the card image menu. */
-    cardimg_menu_init(ccardimg, container,
-	    /* x */ ps_offset + w - BUTTON_GAP - CARDIMG_MENU_WIDTH,
-	    /* y */ BUTTON_GAP + POSW_HEIGHT + CARD_AIR + card_height +
-			CARD_AIR);
-
-    /* Create the character set menu. */
-    charset_menu_init(ccharset, container,
-	    /* x */ ps_offset + w - BUTTON_GAP - CARDIMG_MENU_WIDTH -
-			BUTTON_GAP - CARDIMG_MENU_WIDTH,
-	    /* y */ BUTTON_GAP + POSW_HEIGHT + CARD_AIR + card_height +
-			CARD_AIR);
-
     /* Create the cards. */
     ps_cardw = XtVaCreateManagedWidget(
 	"card", compositeWidgetClass, container,
@@ -830,9 +820,33 @@ define_widgets(void)
 	XtNbackgroundPixmap, pixmap,
 	NULL);
 
+    /* Add the keyboard case. */
+    XtVaCreateManagedWidget(
+	"case", labelWidgetClass, container,
+	XtNwidth, w - 2*CARD_AIR,
+	XtNheight, h - (POSW_HEIGHT + card_height + 4*CARD_AIR),
+	XtNx, ps_offset,
+	XtNy, POSW_HEIGHT + card_height + 2*CARD_AIR,
+	XtNborderWidth, CARD_AIR,
+	XtNlabel, "",
+	NULL);
+
+    /* Create the card image menu. */
+    cardimg_menu_init(ccardimg, container,
+	    /* x */ ps_offset + w - BUTTON_GAP - CARDIMG_MENU_WIDTH,
+	    /* y */ BUTTON_GAP + POSW_HEIGHT + CARD_AIR + card_height +
+			CARD_AIR);
+
+    /* Create the character set menu. */
+    charset_menu_init(ccharset, container,
+	    /* x */ ps_offset + w - BUTTON_GAP - CARDIMG_MENU_WIDTH -
+			BUTTON_GAP - CARDIMG_MENU_WIDTH,
+	    /* y */ BUTTON_GAP + POSW_HEIGHT + CARD_AIR + card_height +
+			CARD_AIR);
+
     /* Add the power button. */
     XtVaCreateManagedWidget(
-	"powerDepression", labelWidgetClass, container,
+	"base", labelWidgetClass, container,
 	XtNwidth, ps_offset + w,
 	XtNheight, POWER_HEIGHT + 2*CARD_AIR,
 	XtNx, -1,
