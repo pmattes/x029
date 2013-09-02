@@ -33,6 +33,7 @@ int eq_count;
 
 static struct timeval tv_set;
 static Boolean to_set = False;
+static XtIntervalId set_id = 0;
 
 static void (*eq_fn[NUM_EVENTS])(int) = {
     queued_DUMMY,
@@ -128,6 +129,7 @@ deq_event(XtPointer data, XtIntervalId *id)
     assert(to_set);
 
     to_set = False;
+    set_id = 0;
 
     gettimeofday(&tv, NULL);
     waited = (((tv.tv_sec - tv_set.tv_sec) * 1000000) +
@@ -163,7 +165,7 @@ deq_event(XtPointer data, XtIntervalId *id)
     if (eq_count && !to_set) {
 	dbg_printf("adding timeout(%d)\n", eq_first->delay);
 	gettimeofday(&tv_set, NULL);
-	(void) XtAppAddTimeOut(appcontext, eq_first->delay, deq_event,
+	set_id = XtAppAddTimeOut(appcontext, eq_first->delay, deq_event,
 		(XtPointer)eq_first);
 	to_set = True;
     } else {
@@ -207,7 +209,7 @@ enq_event(enum evtype evtype, unsigned char param, Boolean interactive,
 	assert(to_set == False);
 	dbg_printf("adding timeout(%d)\n", delay);
 	gettimeofday(&tv_set, NULL);
-	(void) XtAppAddTimeOut(appcontext, delay, deq_event, (XtPointer)e);
+	set_id = XtAppAddTimeOut(appcontext, delay, deq_event, (XtPointer)e);
 	to_set = True;
     }
 }
@@ -224,6 +226,11 @@ flush_typeahead(void)
 	next = e->next;
 	if (e->interactive) {
 	    dbg_printf("Flush %s(%d)*\n", eq_name[e->evtype], e->delay);
+	    if (e == eq_first && to_set) {
+		XtRemoveTimeOut(set_id);
+		set_id = 0;
+		to_set = False;
+	    }
 	    if (prev != NULL) {
 		prev->next = e->next;
 	    } else {
@@ -239,4 +246,19 @@ flush_typeahead(void)
 	prev = e;
     }
     dump_queue("after flush");
+
+    /*
+     * If we cleared out the lead item (and canceled its timeout) but there is
+     * something left, schedule it.
+     *
+     * This code does not handle modifying the time to wait to account for the
+     * time elapsed since the previous timeout was scheduled. It could.
+     */
+    if (eq_count && !to_set) {
+	dbg_printf("adding timeout(%d)\n", eq_first->delay);
+	gettimeofday(&tv_set, NULL);
+	set_id = XtAppAddTimeOut(appcontext, eq_first->delay, deq_event,
+		(XtPointer)eq_first);
+	to_set = True;
+    }
 }
