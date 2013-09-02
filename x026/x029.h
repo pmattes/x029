@@ -20,7 +20,6 @@
 #define CARDIMG_MENU_HEIGHT	44
 
 typedef struct card {
-    struct card *prev;
     struct card *next;
     cardimg_t cardimg;
     charset_t charset;

@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <stdarg.h>
+#include <assert.h>
 #include <X11/Intrinsic.h>
 #include <X11/StringDefs.h>
 #include <X11/Core.h>
@@ -134,7 +135,6 @@ XtAppContext		appcontext;
 
 static char		*programname;
 static int		root_window;
-static int		card_window;
 static int		depth;
 static XFontStruct	*ifontinfo;
 Atom			a_delete_me;
@@ -150,7 +150,7 @@ static charset_t	ccharset = NULL;
 static cardimg_t	ccardimg = NULL;
 static cardimg_t	ncardimg = NULL;
 
-static Dimension	ps_offset;
+static Position		ps_offset;
 
 int			demofd = -1;
 
@@ -314,12 +314,27 @@ static XtActionsRec actions[] = {
 static int actioncount = XtNumber(actions);
 
 static Boolean power_on = False;
-static enum {
+typedef enum {
     C_EMPTY,		/* No card in punch station, no operation pending */
     C_FLUX,		/* Operation in progress (in or out) */
     C_REGISTERED	/* Card registered in punch station */
-} card_state = C_EMPTY;
-#define CARD_REGISTERED	(card_state == C_REGISTERED)
+} cstate_t;
+cstate_t card_state[2] = { C_EMPTY, C_EMPTY };
+static int ps_index = 0;
+static int rs_index = 1;
+#define CARD_REGISTERED	(card_state[ps_index] == C_REGISTERED)
+
+/*
+ * ps_card points to the card in (or near) the punch station.
+ *  It is NULL if no cards have been fed yet.
+ * rs_card points to the card in the read station. It is NULL if we don't have
+ *  a read station, or if the read station is currently empty.
+ * stack points to the stack of cards that have passed through the punch and
+ *  (possibly) read stations. stack_last is the last card in the stacker.
+ */
+static card_t *ps_card, *rs_card;
+static card_t *stack = NULL;
+static card_t *stack_last = NULL;
 
 /* Key press back-ends (xxx_backend). */
 static void save_key_backend(kpkey_t *key);
@@ -327,24 +342,26 @@ static void drop_key_backend(kpkey_t *key);
 static void rel_key_backend(kpkey_t *);
 static void feed_key_backend(kpkey_t *);
 
-/* Queued actions (queued_xxx). */
-static void queued_nothing(int);
-static void queued_data(int);
-static void queued_multipunch(int);
-static void queued_left(int);
-static void queued_kybd_right(int);
-static void queued_rel_right(int);
-static void queued_home(int);
-static void queued_pan_right(int);
-static void queued_pan_left(int);
-static void queued_pan_up(int);
-static void queued_slam(int);
-static void queued_newcard(int);
-static void queued_power_on(int);
-static void queued_press_feed(int);
-static void queued_press_rel(int);
-static void queued_empty(int);
-static void queued_stack(int);
+/* Queued actions (queued_XXX). */
+static void queued_DUMMY(int);
+static void queued_DATA(int);
+static void queued_MULTIPUNCH(int);
+static void queued_KEY_LEFT(int);
+static void queued_KYBD_RIGHT(int);
+static void queued_REL_RIGHT(int);
+static void queued_HOME(int);
+static void queued_PAN_RIGHT_PRINT(int);
+static void queued_PAN_RIGHT_BOTH(int);
+static void queued_PAN_LEFT_PRINT(int);
+static void queued_PAN_LEFT_BOTH(int);
+static void queued_PAN_UP(int);
+static void queued_SLAM(int);
+static void queued_NEWCARD(int);
+static void queued_POWER_ON(int);
+static void queued_PRESS_FEED(int);
+static void queued_PRESS_REL(int);
+static void queued_EMPTY(int);
+static void queued_STACK(int);
 
 /* Other forward references. */
 static void define_widgets(void);
@@ -353,6 +370,7 @@ static void startup_power(void);
 static void do_feed(Boolean keep_sequence);
 static void enq_delay(void);
 static void do_release(int delay);
+static void do_clear_read(void);
 static void demo_fsm(void);
 static void show_key_down(kpkey_t *key);
 static void display_card_count(void);
@@ -546,7 +564,7 @@ struct toggle {
 };
 struct toggle toggles[8];
 
-/* Timeout function for the clear switch. */
+/* Timeout function for the CLEAR switch. */
 static void
 unclear_event(XtPointer data, XtIntervalId *id)
 {
@@ -567,26 +585,31 @@ toggle_callback(Widget w, XtPointer client_data, XtPointer call_data)
 	return;
     }
 
-    /* It's the clear switch. */
+    /* It's the CLEAR switch. */
     if (t->on)
 	return;
     t->on = !t->on;
     XtVaSetValues(w, XtNbackgroundPixmap, t->on? toggle_on: toggle_off, NULL);
     (void) XtAppAddTimeOut(appcontext, SLOW * 6, unclear_event, NULL);
+
     if (CARD_REGISTERED) {
 	do_release(VERY_FAST);
+	if (appres.read) {
+	    do_clear_read();
+	}
+    } else if (card_state[ps_index] == C_EMPTY && rs_card != NULL) {
+	do_clear_read();
     }
 }
 
 /* Card-image data structures. */
-static card_t *ccard;
+
 static int col = 0;
 static GC gc, invgc, holegc;
 
-static Widget container, cardw, posw_porth, posw;
-static int scrollw_column;
-#define SCROLLW_X()	(ps_offset + (card_width * 2 / 3) - CELL_X(scrollw_column))
-#define SCROLLW_Y() 	(BUTTON_GAP + POSW_HEIGHT + CARD_AIR)
+static Widget container, cardw[2], posw_porth, posw;
+#define FEED_X	(ps_offset + (card_width * 2 / 3) - CELL_X(SLAM_COL))
+#define FEED_Y 	(BUTTON_GAP + POSW_HEIGHT - card_height)
 
 static Dimension card_width, card_height;
 static Dimension hole_width, hole_height;
@@ -634,7 +657,7 @@ static void
 define_widgets(void)
 {
     Dimension w, h;
-    Dimension posw_x;
+    Position posw_x;
     XtTranslations t;
     XGCValues xgcv;
     int i;
@@ -642,7 +665,7 @@ define_widgets(void)
     Pixmap hole_shapemask;
     Pixmap column_indicator;
     Pixmap arrow;
-    Dimension sx;
+    Position sx;
     XpmAttributes attributes;
     static char translations[] = "\
 	<Key>Left:	Left()\n\
@@ -789,14 +812,22 @@ define_widgets(void)
 	    /* y */ BUTTON_GAP + POSW_HEIGHT + CARD_AIR + card_height +
 			CARD_AIR);
 
-    /* Create the card. */
-    scrollw_column = SLAM_COL;
-    cardw = XtVaCreateManagedWidget(
+    /* Create the cards. */
+    cardw[ps_index] = XtVaCreateManagedWidget(
 	"card", compositeWidgetClass, container,
 	XtNwidth, card_width,
 	XtNheight, card_height,
-	XtNx, SCROLLW_X(),
-	XtNy, -card_height,
+	XtNx, FEED_X,
+	XtNy, -(card_height + CARD_AIR),
+	XtNborderWidth, 0,
+	XtNbackgroundPixmap, pixmap,
+	NULL);
+    cardw[rs_index] = XtVaCreateManagedWidget(
+	"card", compositeWidgetClass, container,
+	XtNwidth, card_width,
+	XtNheight, card_height,
+	XtNx, FEED_X,
+	XtNy, -(card_height + CARD_AIR),
 	XtNborderWidth, 0,
 	XtNbackgroundPixmap, pixmap,
 	NULL);
@@ -956,14 +987,14 @@ define_widgets(void)
     t = XtParseTranslationTable(translations);
     XtOverrideTranslations(container, t);
     t = XtParseTranslationTable("<Expose>: Redraw()");
-    XtOverrideTranslations(cardw, t);
+    XtOverrideTranslations(cardw[ps_index], t);
+    XtOverrideTranslations(cardw[rs_index], t);
 
     /* Inflate it all. */
     XtRealizeWidget(toplevel);
-    card_window = XtWindow(cardw);
 }
 
-/* Punch a character into a particular column of the current card. */
+/* Punch a character into a particular column of the card the punch station. */
 static Boolean
 punch_char(int cn, unsigned char c)
 {
@@ -981,19 +1012,19 @@ punch_char(int cn, unsigned char c)
     if (!charset_xlate(ccharset, c))
 	return True;
 
-    ccard->holes[cn] |= charset_xlate(ccharset, c);
+    ps_card->holes[cn] |= charset_xlate(ccharset, c);
 
     /* Redundant? */
-    for (j = 0; j < ccard->n_ov[cn]; j++) {
-	if (ccard->coltxt[cn][j] == c) {
+    for (j = 0; j < ps_card->n_ov[cn]; j++) {
+	if (ps_card->coltxt[cn][j] == c) {
 	    return True;
 	}
     }
 
     if (toggles[T_PRINT].on) {
-	if (ccard->n_ov[cn] < N_OV) {
-	    ccard->coltxt[cn][ccard->n_ov[cn]] = c;
-	    ++ccard->n_ov[cn];
+	if (ps_card->n_ov[cn] < N_OV) {
+	    ps_card->coltxt[cn][ps_card->n_ov[cn]] = c;
+	    ++ps_card->n_ov[cn];
 	}
     }
 
@@ -1002,7 +1033,7 @@ punch_char(int cn, unsigned char c)
 
 /* Render the image of a card column onto the X display. */
 static void
-draw_col(int cn)
+draw_col(card_t *card, int window, int cn)
 {
     int i;
     int j;
@@ -1013,16 +1044,16 @@ draw_col(int cn)
 #endif /*]*/
 
     /* Draw the text at the top, possibly overstruck. */
-    for (j = 0; j < ccard->n_ov[cn]; j++) {
-	if (ccard->coltxt[cn][j] < ' ')
+    for (j = 0; j < card->n_ov[cn]; j++) {
+	if (card->coltxt[cn][j] < ' ')
 	    continue;
-	XDrawString(display, card_window, gc, x, TOP_PAD + TEXT_PAD,
-		(char *)&ccard->coltxt[cn][j], 1);
+	XDrawString(display, window, gc, x, TOP_PAD + TEXT_PAD,
+		(char *)&card->coltxt[cn][j], 1);
     }
 
     /* Draw the holes, top to bottom. */
     for (i = 0; i < N_ROWS; i++) {
-	if (ccard->holes[cn] & (0x800>>i)) {
+	if (card->holes[cn] & (0x800>>i)) {
 	    XGCValues xgcv;
 
 	    xgcv.ts_x_origin = x;
@@ -1030,7 +1061,7 @@ draw_col(int cn)
 	    XChangeGC(display, holegc, GCTileStipXOrigin|GCTileStipYOrigin,
 		    &xgcv);
 
-	    XFillRectangle(display, card_window, holegc, x,
+	    XFillRectangle(display, window, holegc, x,
 		    TOP_PAD + HOLE_PAD + (CELL_Y(i)), hole_width, hole_height);
 	}
     }
@@ -1048,47 +1079,48 @@ set_posw(int c)
 
 /* Go to the next card. */
 static void
-queued_newcard(int replace)
+queued_NEWCARD(int replace)
 {
     int i;
+
+    if (rs_card != NULL && ps_card == NULL) {
+	/* Swap the widgets associated with the punch and read stations. */
+	ps_index = !ps_index;
+	rs_index = !rs_index;
+    }
 
     /* Change the card image. */
     if (ncardimg != NULL && ccardimg != ncardimg) {
 	ccardimg = ncardimg;
 	ncardimg = NULL;
-
-	XtVaSetValues(cardw, XtNbackgroundPixmap,
-		pixmap_for_cardimg(ccardimg, 0), NULL);
     }
+    XtVaSetValues(cardw[ps_index], XtNbackgroundPixmap,
+	    pixmap_for_cardimg(ccardimg, 0), NULL);
 
-    if (mode != M_INTERACTIVE)
-	replace = True;
+    if (!ps_card) {
+	/* Allocate a new card. */
+	ps_card = (card_t *)XtMalloc(sizeof(card_t));
+	ps_card->next = NULL;
 
-    if (!ccard || !replace) {
-	card_t *c;
-
-	c = (card_t *)XtMalloc(sizeof(card_t));
-	c->prev = ccard;
-	c->next = NULL;
-	if (ccard) {
-	    ccard->next = c;
-	}
-	ccard = c;
-	c->seq = line_number;
+	ps_card->seq = line_number;
 	line_number += 10;
     } else if (mode != M_INTERACTIVE) {
-	ccard->seq = line_number;
+
+	/* In demo mode, increment the sequence number. */
+	ps_card->seq = line_number;
 	line_number += 10;
     }
-    ccard->cardimg = ccardimg;
-    ccard->charset = ccharset;
-    (void) memset(ccard->coltxt, ' ', sizeof(ccard->coltxt));
-    (void) memset(ccard->holes, 0, sizeof(ccard->holes));
-    (void) memset(ccard->n_ov, 0, sizeof(ccard->n_ov));
+
+    /* Clean out the new card. */
+    ps_card->cardimg = ccardimg;
+    ps_card->charset = ccharset;
+    (void) memset(ps_card->coltxt, ' ', sizeof(ps_card->coltxt));
+    (void) memset(ps_card->holes, 0, sizeof(ps_card->holes));
+    (void) memset(ps_card->n_ov, 0, sizeof(ps_card->n_ov));
     if (appres.autonumber) {
 	char ln_buf[9];
 
-	(void) sprintf(ln_buf, "%08d", ccard->seq);
+	(void) sprintf(ln_buf, "%08d", ps_card->seq);
 	for (i = 0; i < 8; i++) {
 	    punch_char(72+i, ln_buf[i]);
 	}
@@ -1100,7 +1132,9 @@ static void
 Redraw_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 {
     int i;
-    Dimension x, y, w, h;
+    Position x, y;
+    Dimension w, h;
+    card_t *card;
 
     action_dbg("Redraw", wid, event, params, num_params);
 
@@ -1110,9 +1144,15 @@ Redraw_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 	w = event->xexpose.width;
 	h = event->xexpose.height;
     } else {
+	assert(0);
 	x = y = 0;
 	w = card_width;
 	h = card_height;
+    }
+    if (wid == cardw[ps_index]) {
+	card = ps_card;
+    } else {
+	card = rs_card;
     }
 
     /* Slice off the padding. */
@@ -1160,7 +1200,7 @@ Redraw_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
     for (i = COL_FROM_X(x);
 	 i < COL_FROM_X(x + w + CELL_WIDTH) && i < N_COLS;
 	 i++) {
-	draw_col(i);
+	draw_col(card, XtWindow(wid), i);
     }
 }
 
@@ -1178,31 +1218,18 @@ DeleteWindow_action(Widget wid, XEvent *event, String *params,
     }
 }
 
-/* Find the first card in the deck. This is an external entry point. */
+/* Find the first card in the stacker. This is an external entry point. */
 card_t *
 first_card(void)
 {
-    card_t *c;
-
-    for (c = ccard; c && c->prev; c = c->prev) {
-    }
-    if (CARD_REGISTERED && c == ccard) {
-	return NULL;
-    }
-    return c;
+    return stack;
 }
 
 /* Return the next card, skipping the one in the punch station. */
 card_t *
 next_card(card_t *c)
 {
-    card_t *n;
-
-    n = c->next;
-    if (CARD_REGISTERED && n == ccard) {
-	return NULL;
-    }
-    return n;
+    return c->next;
 }
 
 static void
@@ -1218,25 +1245,17 @@ void
 clear_stacker(void)
 {
     card_t *c;
-    card_t *prev = NULL;
+    card_t *next;
 
     /*
-     * Free everything but ccard, and free ccard if it isn't in the punch
-     * station.
+     * Free everything but the cards in the punch and read stations.
      */
-    for (c = ccard; c != NULL; c = prev) {
-	prev = c->prev;
-	if (c == ccard) {
-	    if (CARD_REGISTERED) {
-		c->prev = NULL;
-		c->next = NULL;
-		continue;
-	    } else {
-		ccard = NULL;
-	    }
-	}
+    for (c = stack; c != NULL; c = next) {
+	next = c->next;
 	free(c);
     }
+    stack = NULL;
+    stack_last = NULL;
 
     /* Update the card count display. */
     card_count = 0;
@@ -1248,20 +1267,20 @@ clear_stacker(void)
  */
 
 static void
-queued_nothing(int ignored)
+queued_DUMMY(int ignored)
 {
 }
 
 static void
-queued_data(int c)
+queued_DATA(int c)
 {
     if (CARD_REGISTERED && col < N_COLS) {
 	if (punch_char(col, c)) {
-	    draw_col(col);
+	    draw_col(ps_card, XtWindow(cardw[ps_index]), col);
 #if defined(SOUND) /*[*/
 	    loud_click();
 #endif /*]*/
-	    queued_kybd_right(0);
+	    queued_KYBD_RIGHT(0);
 	} else {
 	    XBell(display, 0);
 	}
@@ -1269,10 +1288,10 @@ queued_data(int c)
 }
 
 static void
-queued_multipunch(int c)
+queued_MULTIPUNCH(int c)
 {
     if (col < N_COLS && punch_char(col, c)) {
-	draw_col(col);
+	draw_col(ps_card, XtWindow(cardw[ps_index]), col);
 #if defined(SOUND) /*[*/
 	loud_click();
 #endif /*]*/
@@ -1280,21 +1299,22 @@ queued_multipunch(int c)
 }
 
 static void
-queued_left(int c)
+queued_KEY_LEFT(int c)
 {
     if (col) {
-	queued_pan_left(0);
+	queued_PAN_LEFT_BOTH(0);
 	set_posw(col - 1);
     } else {
 	flush_typeahead();
     }
 }
 
+/* The queued keyboard cursor-right operation. */
 static void
-queued_kybd_right(int do_click)
+queued_KYBD_RIGHT(int do_click)
 {
     if (col < N_COLS) {
-	queued_pan_right(do_click);
+	queued_PAN_RIGHT_BOTH(do_click);
 	set_posw(col + 1);
 
 	/* Do auto-feed. */
@@ -1310,30 +1330,74 @@ queued_kybd_right(int do_click)
     }
 }
 
+/* One column's worth of queued scroll right from the REL key. */
 static void
-queued_rel_right(int do_click)
+queued_REL_RIGHT(int do_click)
 {
     if (col < N_COLS) {
-	queued_pan_right(do_click);
+	queued_PAN_RIGHT_BOTH(do_click);
 	set_posw(col + 1);
     }
 }
 
 static void
-queued_pan_left(int ignored)
+queued_PAN_LEFT_PRINT(int ignored)
 {
-    scrollw_column--;
-    XtVaSetValues(cardw, XtNx, SCROLLW_X(), NULL);
+    Position x;
+
+    XtVaGetValues(cardw[ps_index], XtNx, &x, NULL);
+    x += CELL_WIDTH;
+    XtVaSetValues(cardw[ps_index], XtNx, x, NULL);
+
 #if defined(SOUND) /*[*/
     soft_click();
 #endif /*]*/
 }
 
 static void
-queued_pan_right(int do_click)
+queued_PAN_LEFT_BOTH(int ignored)
 {
-    scrollw_column++;
-    XtVaSetValues(cardw, XtNx, SCROLLW_X(), NULL);
+    Position x;
+
+    XtVaGetValues(cardw[ps_index], XtNx, &x, NULL);
+    x += CELL_WIDTH;
+    XtVaSetValues(cardw[ps_index], XtNx, x, NULL);
+
+    if (appres.read) {
+	XtVaGetValues(cardw[rs_index], XtNx, &x, NULL);
+	x += CELL_WIDTH;
+	XtVaSetValues(cardw[rs_index], XtNx, x, NULL);
+    }
+#if defined(SOUND) /*[*/
+    soft_click();
+#endif /*]*/
+}
+
+/*
+ * A queued pan right operation.
+ * This has three purposes, which will probably need to be split:
+ * - Moving a new print station card into position.
+ * - Moving a print station card right when punched, scrolled or released
+ *   (within the station).
+ * - Moving a print station card right (when releasing).
+ * The operation affects just the print station card. The second affects both
+ * the print station card and the read station card.
+ */
+static void
+queued_PAN_RIGHT_BOTH(int do_click)
+{
+    Position x;
+
+    XtVaGetValues(cardw[ps_index], XtNx, &x, NULL);
+    x -= CELL_WIDTH;
+    XtVaSetValues(cardw[ps_index], XtNx, x, NULL);
+
+    if (appres.read) {
+	XtVaGetValues(cardw[rs_index], XtNx, &x, NULL);
+	x -= CELL_WIDTH;
+	XtVaSetValues(cardw[rs_index], XtNx, x, NULL);
+    }
+
 #if defined(SOUND) /*[*/
     if (do_click)
 	soft_click();
@@ -1341,78 +1405,130 @@ queued_pan_right(int do_click)
 }
 
 static void
-queued_pan_up(int ignored)
+queued_PAN_RIGHT_PRINT(int do_click)
 {
-    Dimension y;
+    Position x;
 
-    XtVaGetValues(cardw, XtNy, &y, NULL);
-    y += CELL_HEIGHT;
-    XtVaSetValues(cardw, XtNy, y, NULL);
+    XtVaGetValues(cardw[ps_index], XtNx, &x, NULL);
+    x -= CELL_WIDTH;
+    XtVaSetValues(cardw[ps_index], XtNx, x, NULL);
+
+#if defined(SOUND) /*[*/
+    if (do_click)
+	soft_click();
+#endif /*]*/
 }
 
 static void
-queued_home(int ignored)
+queued_PAN_UP(int ignored)
 {
-    queued_pan_left(0);
+    Position y;
+
+    XtVaGetValues(cardw[ps_index], XtNy, &y, NULL);
+    y += CELL_HEIGHT;
+    XtVaSetValues(cardw[ps_index], XtNy, y, NULL);
+}
+
+static void
+queued_HOME(int ignored)
+{
+    queued_PAN_LEFT_BOTH(0);
     set_posw(col - 1);
 }
 
 static void
-queued_slam(int ignored)
+queued_SLAM(int ignored)
 {
-    scrollw_column = SLAM_COL;
-    XtVaSetValues(cardw,
-	XtNx, SCROLLW_X(),
-	XtNy, SCROLLW_Y() - card_height,
+    XtVaSetValues(cardw[ps_index],
+	XtNx, FEED_X,
+	XtNy, FEED_Y,
 	NULL);
 }
 
 static void
-queued_flux(int ignored)
+queued_FLUX(int ignored)
 {
-    card_state = C_FLUX;
+    card_state[ps_index] = C_FLUX;
 }
 
 static void
-queued_registered(int ignored)
+queued_REGISTERED(int ignored)
 {
-    card_state = C_REGISTERED;
+    card_state[ps_index] = C_REGISTERED;
     set_posw(0);
 }
 
 /*
  * Event queueing: Inserting artificial delays in processing certain events.
  */
-enum evtype { DUMMY, DATA, MULTI, LEFT, KYBD_RIGHT, HOME,
-	      PAN_RIGHT, PAN_LEFT, PAN_UP, SLAM, NEWCARD,
-	      FLUX, REGISTERED, REL_RIGHT, POWER_ON, PRESS_FEED, PRESS_REL,
-	      EMPTY, STACK
+enum evtype {
+    DUMMY,
+    DATA,
+    MULTIPUNCH,
+    KEY_LEFT,
+    KYBD_RIGHT,
+    HOME,
+    PAN_RIGHT_BOTH,
+    PAN_RIGHT_PRINT,
+    PAN_LEFT_PRINT,
+    PAN_LEFT_BOTH,
+    PAN_UP,
+    SLAM,
+    NEWCARD,
+    FLUX,
+    REGISTERED,
+    REL_RIGHT,
+    POWER_ON,
+    PRESS_FEED,
+    PRESS_REL,
+    EMPTY,
+    STACK
 };
 void (*eq_fn[])(int) = {
-    queued_nothing,
-    queued_data,
-    queued_multipunch,
-    queued_left,
-    queued_kybd_right,
-    queued_home,
-    queued_pan_right,
-    queued_pan_left,
-    queued_pan_up,
-    queued_slam,
-    queued_newcard,
-    queued_flux,
-    queued_registered,
-    queued_rel_right,
-    queued_power_on,
-    queued_press_feed,
-    queued_press_rel,
-    queued_empty,
-    queued_stack
+    queued_DUMMY,
+    queued_DATA,
+    queued_MULTIPUNCH,
+    queued_KEY_LEFT,
+    queued_KYBD_RIGHT,
+    queued_HOME,
+    queued_PAN_RIGHT_BOTH,
+    queued_PAN_RIGHT_PRINT,
+    queued_PAN_LEFT_PRINT,
+    queued_PAN_LEFT_BOTH,
+    queued_PAN_UP,
+    queued_SLAM,
+    queued_NEWCARD,
+    queued_FLUX,
+    queued_REGISTERED,
+    queued_REL_RIGHT,
+    queued_POWER_ON,
+    queued_PRESS_FEED,
+    queued_PRESS_REL,
+    queued_EMPTY,
+    queued_STACK
 };
 char *eq_name[] = {
-    "DUMMY", "DATA", "MULTI", "LEFT", "KYBD_RIGHT", "HOME", "PAN_RIGHT",
-    "PAN_LEFT", "PAN_UP", "SLAM", "NEWCARD", "FLUX", "REGISTERED",
-    "REL_RIGHT", "POWER_ON", "PRESS_FEED", "PRESS_REL", "EMPTY", "STACK"
+    "DUMMY",
+    "DATA",
+    "MULTIPUNCH",
+    "KEY_LEFT",
+    "KYBD_RIGHT",
+    "HOME",
+    "PAN_RIGHT_BOTH",
+    "PAN_RIGHT_PRINT",
+    "PAN_LEFT_PRINT",
+    "PAN_LEFT_BOTH",
+    "PAN_UP",
+    "SLAM",
+    "NEWCARD",
+    "FLUX",
+    "REGISTERED",
+    "REL_RIGHT",
+    "POWER_ON",
+    "PRESS_FEED",
+    "PRESS_REL",
+    "EMPTY",
+    "STACK"
 };
 typedef struct event {
     struct event *next;
@@ -1564,8 +1680,8 @@ flush_typeahead(void)
 }
 
 /*
- * Add a character to the current card. This is an external entry point used
- * by the paste logic and the demo logic.
+ * Add a character to the card the punch station. This is an external entry
+ * point used by the paste logic and the demo logic.
  */
 Boolean
 add_char(char c)
@@ -1624,7 +1740,7 @@ MultiPunchData_action(Widget wid, XEvent *event, String *params,
 
     ll = XLookupString(kevent, buf, 10, &ks, (XComposeStatus *)NULL);
     if (ll == 1) {
-	enq_event(MULTI, buf[0], True, SLOW);
+	enq_event(MULTIPUNCH, buf[0], True, SLOW);
     }
 }
 
@@ -1634,7 +1750,7 @@ Left_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
     action_dbg("Left", wid, event, params, num_params);
 
     if (power_on && CARD_REGISTERED) {
-	enq_event(LEFT, 0, True, SLOW);
+	enq_event(KEY_LEFT, 0, True, SLOW);
     }
 }
 
@@ -1657,7 +1773,7 @@ Home_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 
     if (power_on && CARD_REGISTERED) {
 	flush_typeahead();
-	card_state = C_FLUX;
+	card_state[ps_index] = C_FLUX;
 	for (i = 0; i < col; i++) {
 	    enq_event(HOME, 0, False, FAST);
 	}
@@ -1666,7 +1782,7 @@ Home_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 }
 
 /*
- * Scroll the current card away, and get a new one.
+ * Scroll the card in the punch station away, and get a new one.
  * This is mapped to the Enter (X11 'Return') key, which is the 029 REL key.
  */
 static void
@@ -1703,7 +1819,7 @@ Tab_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 
     if (power_on && CARD_REGISTERED) {
 	flush_typeahead();
-	card_state = C_FLUX;
+	card_state[ps_index] = C_FLUX;
 	for (i = col; i < 6; i++) {
 	    enq_event(KYBD_RIGHT, 1, False, SLOW);
 	}
@@ -1722,13 +1838,20 @@ drop_key_backend(kpkey_t *key)
     }
 
     flush_typeahead();
-    card_state = C_FLUX;
+    card_state[ps_index] = C_FLUX;
 
-    /* Scroll the previous card away. */
-    for (i = 0; i <= col; i++)
-	enq_event(LEFT, 0, False, FAST);
-    for (i = 0; i < N_COLS/2 + 3; i++)
-	enq_event(PAN_LEFT, 0, False, FAST);
+    /* Do a Home operation. */
+    for (i = 0; i <= col; i++) {
+	enq_event(KEY_LEFT, 0, False, FAST);
+    }
+
+    /*
+     * Scroll the print station card off to the right.
+     * XXX: Another magic number.
+     */
+    for (i = 0; i < N_COLS/2 + 12; i++) {
+	enq_event(PAN_LEFT_PRINT, 0, False, FAST);
+    }
 
     if (toggles[T_AUTO_FEED].on) {
 	do_feed(True);
@@ -1835,20 +1958,44 @@ do_release(int delay)
 
     /* The card is now officially invisible. */
     flush_typeahead();
-    card_state = C_FLUX;
+    card_state[ps_index] = C_FLUX;
 
     /* Space over the remainder of the card. */
     for (i = col; i < N_COLS; i++) {
 	enq_event(REL_RIGHT, 0, False, delay);
     }
 
-    /* Scroll the card out of the punch station. */
-    for (i = 0; i < N_COLS/2 + 12; i++) {
-	enq_event(PAN_RIGHT, 0, False, delay);
+    /*
+     * Scroll the card out of the punch station.
+     * XXX: The end column is a magic number.
+     */
+    for (i = 0; i < N_COLS/2 + 16; i++) {
+	enq_event(PAN_RIGHT_BOTH, 0, False, delay);
     }
 
     /* The punch station is now empty. */
     enq_event(EMPTY, 0, False, 0);
+
+    /* We've saved a new card. */
+    enq_event(STACK, 0, False, 0);
+}
+
+/*
+ * Release the card in the reader station, i.e., scroll it off to the left.
+ * This is only used by the CLEAR switch.
+ */
+static void
+do_clear_read(void)
+{
+    int i;
+
+    /*
+     * Scroll the card out of the read station.
+     * XXX: The end column is a magic number.
+     */
+    for (i = 0; i < N_COLS + 14; i++) {
+	enq_event(PAN_RIGHT_BOTH, 0, False, VERY_FAST);
+    }
 
     /* We've saved a new card. */
     enq_event(STACK, 0, False, 0);
@@ -1868,23 +2015,23 @@ do_feed(Boolean keep_sequence)
 	    enq_event(PAN_UP, 0, False, FAST);
     }
     for (i = SLAM_COL; i < SLAM_TARGET_COL; i++) {
-	    enq_event(PAN_RIGHT, 0, False, VERY_FAST);
+	    enq_event(PAN_RIGHT_PRINT, 0, False, VERY_FAST);
     }
 
-    /* The punch station is now full. */
+    /* There is now a card registered in the punch station. */
     enq_event(REGISTERED, 0, False, 0);
 }
 
 /* Start-up sequence. */
 static void
-queued_power_on(int ignored)
+queued_POWER_ON(int ignored)
 {
     power_on = True;
     XtVaSetValues(power_widget, XtNbackgroundPixmap, flipper_on, NULL);
 }
 
 static void
-queued_press_feed(int ignored)
+queued_PRESS_FEED(int ignored)
 {
     show_key_down(&feed_key);
 }
@@ -1904,15 +2051,15 @@ startup_power(void)
 }
 
 static void
-queued_press_rel(int ignored)
+queued_PRESS_REL(int ignored)
 {
     show_key_down(&rel_key);
 }
 
 static void
-queued_empty(int ignored)
+queued_EMPTY(int ignored)
 {
-    card_state = C_EMPTY;
+    card_state[ps_index] = C_EMPTY;
 }
 
 static void
@@ -1924,11 +2071,51 @@ display_card_count(void)
     XtVaSetValues(stacker, XtNlabel, label, NULL);
 }
 
+/*
+ * Add a card to the stack, or throw it away.
+ *
+ * Updates the stacker count, which might be fake.
+ */
 static void
-queued_stack(int ignored)
+stack_card(card_t **c)
 {
+    if (mode == M_INTERACTIVE) {
+	if (stack_last != NULL) {
+	    stack_last->next = *c;
+	} else {
+	    stack = *c;
+	}
+	stack_last = *c;
+    } else {
+	XtFree((XtPointer)*c);
+    }
+    *c = NULL;
     card_count++;
     display_card_count();
+}
+
+/*
+ * Shift the cards to the left.
+ *
+ * If we have a read station, shift the card from the punch station to the
+ *  read station, and from the read station into the stacker.
+ * Otherwise, shift the card from the punch station directly into the stacker.
+ */
+static void
+queued_STACK(int ignored)
+{
+    if (appres.read) {
+	if (rs_card != NULL) {
+	    stack_card(&rs_card);
+	}
+	rs_card = ps_card;
+	ps_card = NULL;
+    } else {
+	/* Move the card from the punch station into the stacker. */
+	if (ps_card != NULL) {
+	    stack_card(&ps_card);
+	}
+    }
 }
 
 /* Demo processing. */
@@ -2176,11 +2363,11 @@ card_is_blank(void)
 {
     int i;
 
-    if (!ccard) {
+    if (ps_card == NULL) {
 	return True;
     }
     for (i = 0; i < N_COLS; i++) {
-	if (ccard->holes[i]) {
+	if (ps_card->holes[i]) {
 	    return False;
 	}
     }
@@ -2190,12 +2377,12 @@ card_is_blank(void)
 int
 set_charset(charset_t c)
 {
-    if (card_state != C_EMPTY && !card_is_blank()) {
+    if (card_state[ps_index] != C_EMPTY && !card_is_blank()) {
 	return -1;
     }
     ccharset = c;
-    if (ccard != NULL) {
-	ccard->charset = c;
+    if (ps_card != NULL) {
+	ps_card->charset = c;
     }
     return 0;
 }
