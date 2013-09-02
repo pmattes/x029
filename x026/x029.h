@@ -46,7 +46,11 @@ extern Pixel get_errcolor(void);
 extern Pixel get_cabinet(void);
 extern Pixel get_foreground(void);
 extern charset_t get_charset(void);
+extern Boolean debugging(void);
+extern void demo_fsm(void);
 
+extern void dbg_printf(const char *fmt, ...);
+extern void dbg_cprintf(const char *fmt, ...);
 extern void action_dbg(const char *name, Widget wid, XEvent *event,
 	String *params, Cardinal *num_params);
 

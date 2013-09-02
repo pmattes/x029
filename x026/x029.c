@@ -38,6 +38,7 @@
 #include "save.h"		/* save module */
 #include "cardimg_menu.h"	/* card image menu */
 #include "charset_menu.h"	/* character set menu */
+#include "eventq.h"		/* event queueing module */
 
 #include "hole.xpm"		/* hole image */
 #include "flipper_off.xpm"	/* power switch, off */
@@ -162,7 +163,7 @@ typedef enum {
     M_BATCH,			/* read from a fixed file */
     M_REMOTECTL			/* read from stdin incrementally */
 } imode_t;
-imode_t mode = M_INTERACTIVE;
+static imode_t mode = M_INTERACTIVE;
 
 /* 029 simulated key structure. */
 typedef struct _key {
@@ -342,30 +343,6 @@ static void drop_key_backend(kpkey_t *key);
 static void rel_key_backend(kpkey_t *);
 static void feed_key_backend(kpkey_t *);
 
-/* Queued actions (queued_XXX). */
-static void queued_DUMMY(int);
-static void queued_DATA(int);
-static void queued_MULTIPUNCH(int);
-static void queued_KEY_LEFT(int);
-static void queued_KYBD_RIGHT(int);
-static void queued_REL_RIGHT(int);
-static void queued_HOME(int);
-static void queued_PAN_RIGHT_PRINT(int);
-static void queued_PAN_RIGHT_BOTH(int);
-static void queued_PAN_RIGHT_READ(int);
-static void queued_PAN_LEFT_PRINT(int);
-static void queued_PAN_LEFT_BOTH(int);
-static void queued_PAN_UP(int);
-static void queued_SLAM(int);
-static void queued_NEWCARD(int);
-static void queued_POWER_ON(int);
-static void queued_PRESS_FEED(int);
-static void queued_PRESS_REL(int);
-static void queued_EMPTY(int);
-static void queued_STACK(int);
-static void queued_OFF(int);
-static void queued_CLEAR_SEQ(int);
-
 /* Other forward references. */
 static void define_widgets(void);
 static void startup_power_feed(void);
@@ -374,12 +351,8 @@ static void do_feed(Boolean keep_sequence);
 static void enq_delay(void);
 static void do_release(int delay);
 static void do_clear_read(void);
-static void demo_fsm(void);
 static void show_key_down(kpkey_t *key);
 static void display_card_count(void);
-static void flush_typeahead(void);
-
-static void dbg_printf(const char *format, ...);
 
 /* Syntax. */
 void
@@ -557,7 +530,7 @@ power_callback(Widget w, XtPointer client_data, XtPointer call_data)
     do_power_off();
 }
 
-static void
+void
 queued_OFF(int ignored)
 {
     do_power_off();
@@ -1103,7 +1076,7 @@ set_posw(int c)
 }
 
 /* Go to the next card. */
-static void
+void
 queued_NEWCARD(int replace)
 {
     int i;
@@ -1287,12 +1260,12 @@ clear_stacker(void)
  * Internals of functions that are enqueued with a delay.
  */
 
-static void
+void
 queued_DUMMY(int ignored)
 {
 }
 
-static void
+void
 queued_DATA(int c)
 {
     if (CARD_REGISTERED && col < N_COLS) {
@@ -1308,7 +1281,7 @@ queued_DATA(int c)
     }
 }
 
-static void
+void
 queued_MULTIPUNCH(int c)
 {
     if (col < N_COLS && punch_char(col, c)) {
@@ -1319,7 +1292,7 @@ queued_MULTIPUNCH(int c)
     }
 }
 
-static void
+void
 queued_KEY_LEFT(int c)
 {
     if (col) {
@@ -1331,7 +1304,7 @@ queued_KEY_LEFT(int c)
 }
 
 /* The queued keyboard cursor-right operation. */
-static void
+void
 queued_KYBD_RIGHT(int do_click)
 {
     if (col < N_COLS) {
@@ -1352,7 +1325,7 @@ queued_KYBD_RIGHT(int do_click)
 }
 
 /* One column's worth of queued scroll right from the REL key. */
-static void
+void
 queued_REL_RIGHT(int do_click)
 {
     if (col < N_COLS) {
@@ -1361,7 +1334,7 @@ queued_REL_RIGHT(int do_click)
     }
 }
 
-static void
+void
 queued_PAN_LEFT_PRINT(int ignored)
 {
     Position x;
@@ -1375,7 +1348,7 @@ queued_PAN_LEFT_PRINT(int ignored)
 #endif /*]*/
 }
 
-static void
+void
 queued_PAN_LEFT_BOTH(int ignored)
 {
     Position x;
@@ -1404,7 +1377,7 @@ queued_PAN_LEFT_BOTH(int ignored)
  * The operation affects just the print station card. The second affects both
  * the print station card and the read station card.
  */
-static void
+void
 queued_PAN_RIGHT_BOTH(int do_click)
 {
     Position x;
@@ -1425,7 +1398,7 @@ queued_PAN_RIGHT_BOTH(int do_click)
 #endif /*]*/
 }
 
-static void
+void
 queued_PAN_RIGHT_PRINT(int do_click)
 {
     Position x;
@@ -1440,7 +1413,7 @@ queued_PAN_RIGHT_PRINT(int do_click)
 #endif /*]*/
 }
 
-static void
+void
 queued_PAN_RIGHT_READ(int do_click)
 {
     Position x;
@@ -1455,7 +1428,7 @@ queued_PAN_RIGHT_READ(int do_click)
 #endif /*]*/
 }
 
-static void
+void
 queued_PAN_UP(int ignored)
 {
     Position y;
@@ -1465,14 +1438,14 @@ queued_PAN_UP(int ignored)
     XtVaSetValues(ps_cardw, XtNy, y, NULL);
 }
 
-static void
+void
 queued_HOME(int ignored)
 {
     queued_PAN_LEFT_BOTH(0);
     set_posw(col - 1);
 }
 
-static void
+void
 queued_SLAM(int ignored)
 {
     XtVaSetValues(ps_cardw,
@@ -1481,268 +1454,17 @@ queued_SLAM(int ignored)
 	NULL);
 }
 
-static void
+void
 queued_FLUX(int ignored)
 {
     punch_state = C_FLUX;
 }
 
-static void
+void
 queued_REGISTERED(int ignored)
 {
     punch_state = C_REGISTERED;
     set_posw(0);
-}
-
-/*
- * Event queueing: Inserting artificial delays in processing certain events.
- */
-enum evtype {
-    DUMMY,
-    DATA,
-    MULTIPUNCH,
-    KEY_LEFT,
-    KYBD_RIGHT,
-    HOME,
-    PAN_RIGHT_BOTH,
-    PAN_RIGHT_PRINT,
-    PAN_RIGHT_READ,
-    PAN_LEFT_PRINT,
-    PAN_LEFT_BOTH,
-    PAN_UP,
-    SLAM,
-    NEWCARD,
-    FLUX,
-    REGISTERED,
-    REL_RIGHT,
-    POWER_ON,
-    PRESS_FEED,
-    PRESS_REL,
-    EMPTY,
-    STACK,
-    OFF,
-    CLEAR_SEQ
-};
-void (*eq_fn[])(int) = {
-    queued_DUMMY,
-    queued_DATA,
-    queued_MULTIPUNCH,
-    queued_KEY_LEFT,
-    queued_KYBD_RIGHT,
-    queued_HOME,
-    queued_PAN_RIGHT_BOTH,
-    queued_PAN_RIGHT_PRINT,
-    queued_PAN_RIGHT_READ,
-    queued_PAN_LEFT_PRINT,
-    queued_PAN_LEFT_BOTH,
-    queued_PAN_UP,
-    queued_SLAM,
-    queued_NEWCARD,
-    queued_FLUX,
-    queued_REGISTERED,
-    queued_REL_RIGHT,
-    queued_POWER_ON,
-    queued_PRESS_FEED,
-    queued_PRESS_REL,
-    queued_EMPTY,
-    queued_STACK,
-    queued_OFF,
-    queued_CLEAR_SEQ
-};
-char *eq_name[] = {
-    "DUMMY",
-    "DATA",
-    "MULTIPUNCH",
-    "KEY_LEFT",
-    "KYBD_RIGHT",
-    "HOME",
-    "PAN_RIGHT_BOTH",
-    "PAN_RIGHT_PRINT",
-    "PAN_RIGHT_READ",
-    "PAN_LEFT_PRINT",
-    "PAN_LEFT_BOTH",
-    "PAN_UP",
-    "SLAM",
-    "NEWCARD",
-    "FLUX",
-    "REGISTERED",
-    "REL_RIGHT",
-    "POWER_ON",
-    "PRESS_FEED",
-    "PRESS_REL",
-    "EMPTY",
-    "STACK",
-    "OFF",
-    "CLEAR_SEQ"
-};
-typedef struct event {
-    struct event *next;
-    enum evtype evtype;
-    unsigned char param;
-    Boolean interactive;
-    int delay;
-} event_t;
-event_t *eq_first, *eq_last;
-int eq_count;
-
-static void
-dump_queue(const char *when)
-{
-    event_t *e = NULL;
-    event_t *prev = NULL;
-    int cnt = 0;
-
-    if (!appres.debug)
-	return;
-
-    printf("queue(%s):", when);
-    if (eq_first == NULL) {
-	printf(" (empty)\n");
-	return;
-    }
-
-    for (e = eq_first; e != NULL; e = e->next) {
-	if (prev == NULL) {
-	    prev = e;
-	    cnt = 1;
-	    continue;
-	}
-	if (prev->evtype == e->evtype && prev->interactive == e->interactive && prev->delay == e->delay) {
-	    cnt++;
-	    continue;
-	}
-	printf(" %s(%d)%s", eq_name[prev->evtype], prev->delay,
-		prev->interactive? "*": "");
-	if (cnt > 1)
-	    printf("x%d", cnt);
-	prev = e;
-	cnt = 1;
-    }
-    if (cnt) {
-	printf(" %s(%d)%s", eq_name[prev->evtype], prev->delay,
-		prev->interactive? "*": "");
-	if (cnt > 1)
-	    printf("x%d", cnt);
-    }
-    printf("\n");
-}
-
-static struct timeval tv_set;
-
-/* Run the event at the front of the queue. */
-static void
-deq_event(XtPointer data, XtIntervalId *id)
-{
-    event_t *e;
-    struct timeval tv;
-    long waited;
-
-    gettimeofday(&tv, NULL);
-    waited = (((tv.tv_sec - tv_set.tv_sec) * 1000000) +
-	       (tv.tv_usec - tv_set.tv_usec)) / 1000;
-    dbg_printf("deq_event waited %ldms\n", waited);
-    if (waited < eq_first->delay) {
-	eq_first->delay -= waited;
-	/*fprintf(stderr, "Arrrgh!\n");*/
-	(void) XtAppAddTimeOut(appcontext, eq_first->delay, deq_event, NULL);
-	return;
-    }
-
-    if (!eq_count)
-	return;
-
-    dump_queue("before deq");
-
-    /* Dequeue it. */
-    e = eq_first;
-    eq_first = e->next;
-    if (eq_first == NULL)
-	eq_last = NULL;
-    --eq_count;
-
-    /* Run it. */
-    dbg_printf("run %s(%d)\n", eq_name[e->evtype], e->delay);
-    (*eq_fn[e->evtype])(e->param);
-
-    /* Free it. */
-    XtFree((XtPointer)e);
-    e = NULL;
-
-    /*
-     * If there are more events, schedule the next one.
-     * Otherwise, see if the demo FSM needs cranking.
-     */
-    if (eq_count) {
-	dbg_printf("adding timeout(%d)\n", eq_first->delay);
-	gettimeofday(&tv_set, NULL);
-	(void) XtAppAddTimeOut(appcontext, eq_first->delay, deq_event, NULL);
-    } else {
-	if (mode != M_INTERACTIVE) {
-	    demo_fsm();
-	}
-    }
-}
-
-/* Add an event to the back of the queue. */
-static Boolean
-enq_event(enum evtype evtype, unsigned char param, Boolean interactive,
-	int delay)
-{
-    event_t *e;
-
-    if (evtype == DUMMY && delay == 0)
-	return True;
-    if (delay == 0)
-	delay = 1;
-    e = (event_t *)XtMalloc(sizeof(*e));
-    e->evtype = evtype;
-    e->param = param;
-    e->interactive = interactive;
-    e->delay = delay;
-
-    e->next = NULL;
-    if (eq_first == NULL)
-	eq_first = e;
-    if (eq_last != NULL)
-	eq_last->next = e;
-    eq_last = e;
-    dump_queue("after enq");
-
-    if (!eq_count++) {
-	dbg_printf("adding timeout(%d)\n", delay);
-	gettimeofday(&tv_set, NULL);
-	(void) XtAppAddTimeOut(appcontext, delay, deq_event, NULL);
-    }
-    return True;
-}
-
-/* Flush typeahead events from the queue. */
-static void
-flush_typeahead(void)
-{
-    event_t *e;
-    event_t *prev = NULL;
-    event_t *next;
-
-    for (e = eq_first; e != NULL; e = next) {
-	next = e->next;
-	if (e->interactive) {
-	    dbg_printf("Flush %s(%d)*\n", eq_name[e->evtype], e->delay);
-	    if (prev != NULL) {
-		prev->next = e->next;
-	    } else {
-		eq_first = e->next;
-	    }
-	    if (e->next == NULL) {
-		eq_last = prev;
-	    }
-	    XtFree((XtPointer)e);
-	    eq_count--;
-	    continue;
-	}
-	prev = e;
-    }
-    dump_queue("after flush");
 }
 
 /*
@@ -2090,14 +1812,14 @@ do_feed(Boolean keep_sequence)
 }
 
 /* Start-up sequence. */
-static void
+void
 queued_POWER_ON(int ignored)
 {
     power_on = True;
     XtVaSetValues(power_widget, XtNbackgroundPixmap, flipper_on, NULL);
 }
 
-static void
+void
 queued_PRESS_FEED(int ignored)
 {
     show_key_down(&feed_key);
@@ -2117,13 +1839,13 @@ startup_power(void)
     enq_event(POWER_ON, 0, False, VERY_SLOW);
 }
 
-static void
+void
 queued_PRESS_REL(int ignored)
 {
     show_key_down(&rel_key);
 }
 
-static void
+void
 queued_EMPTY(int free_it)
 {
     if (free_it && ps_card != NULL) {
@@ -2172,7 +1894,7 @@ stack_card(card_t **c)
  *  read station, and from the read station into the stacker.
  * Otherwise, shift the card from the punch station directly into the stacker.
  */
-static void
+void
 queued_STACK(int ignored)
 {
     if (appres.read) {
@@ -2219,7 +1941,7 @@ read_more(XtPointer closure, int *fd, XtInputId *id)
 /*
  * Crank the demo FSM.
  */
-static void
+void
 demo_fsm(void)
 {
     static char buf[1024];
@@ -2227,6 +1949,10 @@ demo_fsm(void)
     static ssize_t rbsize = 0;
     static char *s = buf + sizeof(buf);
     char c;
+
+    if (mode == M_INTERACTIVE) {
+	return;
+    }
 
     do {
 	dbg_printf("demo_fsm: %s\n", bs_name[bs]);
@@ -2355,14 +2081,14 @@ demo_fsm(void)
 	    enq_event(CLEAR_SEQ, 0, False, SLOW * 3);
 	    break;
 	}
-    } while (eq_first == NULL && power_on);
+    } while (eq_count == 0 && power_on);
 
 }
 
 /*
  * The shutdown sequence for demos.
  */
-static void
+void
 queued_CLEAR_SEQ(int ignored)
 {
     /*
@@ -2408,7 +2134,7 @@ get_charset(void)
 }
 
 /* Debug printing. */
-static void
+void
 dbg_printf(const char *format, ...)
 {
     va_list ap;
@@ -2420,6 +2146,21 @@ dbg_printf(const char *format, ...)
 
     gettimeofday(&tv, NULL);
     printf("%lu.%06lu ", (unsigned long)tv.tv_sec, (unsigned long)tv.tv_usec);
+
+    va_start(ap, format);
+    vfprintf(stdout, format, ap);
+    va_end(ap);
+    fflush(stdout);
+}
+
+void
+dbg_cprintf(const char *format, ...)
+{
+    va_list ap;
+
+    if (!appres.debug) {
+	return;
+    }
 
     va_start(ap, format);
     vfprintf(stdout, format, ap);
@@ -2490,4 +2231,10 @@ set_charset(charset_t c)
 	ps_card->charset = c;
     }
     return 0;
+}
+
+Boolean
+debugging(void)
+{
+    return appres.debug;
 }
