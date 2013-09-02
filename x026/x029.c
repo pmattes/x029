@@ -93,8 +93,84 @@ char *bottom_label3[] = { "DUP", NULL, "SEL", NULL, NULL, NULL, NULL, NULL };
 #define CELL_Y(row)	(((row) * CELL_Y_NUM) / CELL_Y_DENOM)
 #define ROW_FROM_Y(y)	(((y) * CELL_Y_DENOM) / CELL_Y_NUM)
 
-#define HOLE_WIDTH	5	/* unused for now */
-#define HOLE_HEIGHT	11	/* unused for now */
+/*
+ * Vertical stacking:
+ *
+ * POSW_HEIGHT		POSW_TFRAME
+ * 			POSW_INNER_HEIGHT
+ * 			POSW_FRAME
+ * MECH_HEIGHT		MECH_TFRAME
+ * 			CHANNEL_HEIGHT		CHANNEL_TFRAME
+ * 						CARD_HEIGHT
+ * 						CHANNEL_BFRAME
+ * 			MECH_BFRAME
+ * KEYBOX_HEIGHT	KEYBOX_BORDER
+ * 			KEYBOX_INNER_HEIGHT	SWITCHES_HEIGHT	SWITCHES_TFRAME
+ * 								SWITCH_PANEL_HEIGHT
+ * 								SWITCHES_BFRAME
+ * 			KEYBOX_BORDER
+ * 						KEYBOARD_HEIGHT	KEYBOARD_TFRAME
+ * 								KEY_HEIGHT
+ * 								KEYBOARD_BFRAME
+ * DESK_HEIGHT		DESK_FRAME
+ * 			DESK_THICKNESS
+ * 			DESK_FRAME
+ * BASE_HEIGHT		CARD_AIR
+ * 			CARDIMG_MENU_HEIGHT
+ * 			CARD_AIR
+ */
+#define POSW_TFRAME	8
+#define POSW_INNER_HEIGHT 29
+#define POSW_FRAME	4
+#define  POSW_HEIGHT	(POSW_TFRAME + POSW_INNER_HEIGHT + POSW_FRAME)
+
+#define MECH_TFRAME	10
+#define CHANNEL_Y	(POSW_HEIGHT + MECH_TFRAME)
+#define CHANNEL_X	0
+
+#define CHANNEL_TFRAME	15
+#define CARD_HEIGHT	331
+#define CHANNEL_BFRAME	10
+#define  CHANNEL_HEIGHT	(CHANNEL_TFRAME + CARD_HEIGHT + CHANNEL_BFRAME)
+
+#define MECH_BFRAME	20
+
+#define  MECH_HEIGHT	(MECH_TFRAME + CHANNEL_HEIGHT + MECH_BFRAME)
+
+#define KEYBOX_Y	(POSW_HEIGHT + MECH_HEIGHT)
+
+#define	SWITCHES_TFRAME	20
+#define	SWITCH_PANEL_HEIGHT 100
+#define SWITCHES_BFRAME	20
+#define  SWITCHES_HEIGHT (SWITCHES_TFRAME + SWITCH_PANEL_HEIGHT + SWITCHES_BFRAME)
+
+#define KEYBOARD_TFRAME	10
+#define KEYBOARD_BFRAME	10
+#define KEYBOARD_LRFRAME 10
+#define  KEYBOARD_HEIGHT (KEYBOARD_TFRAME + KEY_HEIGHT + KEYBOARD_BFRAME)
+
+#define  KEYBOX_INNER_HEIGHT	(SWITCHES_HEIGHT + KEYBOX_BORDER + KEYBOARD_HEIGHT)
+
+#define KEYBOX_BORDER	CARD_AIR
+#define KEYBOX_WIDTH	w
+#define  KEYBOX_HEIGHT	(KEYBOX_BORDER + KEYBOX_INNER_HEIGHT)
+#define KEYBOARD_WIDTH	(w - 2*KEYBOX_BORDER)
+#define KEYBOARD_Y	(KEYBOX_BORDER + SWITCHES_HEIGHT + KEYBOX_BORDER)
+#define KEYBOARD_X	KEYBOX_BORDER
+
+#define DESK_Y		(KEYBOX_Y + KEYBOX_HEIGHT)
+
+#define DESK_FRAME	1
+#define DESK_THICKNESS	20
+#define  DESK_HEIGHT	(2*DESK_FRAME + DESK_THICKNESS)
+
+#define BASE_Y		(DESK_Y + DESK_HEIGHT)
+
+#define BASE_HEIGHT	(2*CARD_AIR + CARDIMG_MENU_HEIGHT)
+
+#define TOTAL_HEIGHT	(POSW_HEIGHT + MECH_HEIGHT + KEYBOX_HEIGHT + DESK_HEIGHT + BASE_HEIGHT)
+
+/* ... */
 
 #define SWITCH_AIR	40
 #define SWITCH_HEIGHT	60
@@ -114,10 +190,6 @@ char *bottom_label3[] = { "DUP", NULL, "SEL", NULL, NULL, NULL, NULL, NULL };
 #define BUTTON_WIDTH	45
 #define	BUTTON_HEIGHT	20
 
-#define POSW_INNER_HEIGHT	29
-#define POSW_TFRAME	8
-#define POSW_FRAME	4
-#define POSW_HEIGHT	(POSW_TFRAME + POSW_INNER_HEIGHT + POSW_FRAME)
 #define POSW_INNER_WIDTH	(KEY_WIDTH * 3)
 #define POSW_WIDTH	(POSW_FRAME + POSW_INNER_WIDTH + POSW_FRAME)
 #define ARROW_WIDTH	19
@@ -180,9 +252,9 @@ kpkey_t save_key;		/* SAVE key */
 kpkey_t drop_key;		/* DROP key */
 
 typedef void (*key_backend_t)(kpkey_t *);
-static void key_init(kpkey_t *key, const char *name, Widget container, int x,
-	int y, char *normal_pixmap_src[], char *pressed_pixmap_src[],
-	key_backend_t backend);
+static void key_init(kpkey_t *key, const char *name, Widget container,
+	Position x, Position y, char *normal_pixmap_src[],
+	char *pressed_pixmap_src[], key_backend_t backend);
 
 /* Application resources. */
 typedef struct {
@@ -267,22 +339,27 @@ static XtResource resources[] = {
 /* Fallback resources. */
 static String fallbacks[] = {
     "*ifont:		7x13",
-    "*stackerDepression.background:	grey38",	/* good */
+    "*stackerDepression.background:	grey38",
     "*depression.background:		grey38",
     "*stacker.font:	6x13bold",
     "*stacker.foreground:	black",
-    "*stacker.background:		grey92",	/* good */
+    "*stacker.background:		grey92",
     "*dialog*value*font: fixed",
-    "*base.background:	grey57",	/* good */
+    "*base.background:	grey57",
     "*switch.font:  	6x10",
-    "*switch.background:  		grey92",	/* good */
+    "*switch.background:  		grey92",
     "*font:		variable",
-    "*cabinet:				grey75",	/* good */
+    "*cabinet:				grey75",
+    "*channel.background:		grey92",
     "*cardColor:	ivory", /* nonsense? */
-    "*case.background:			grey92",	/* good */
-    "*case.borderColor: ivory1",			/* good */
+    /*"*keybox.background:		grey92",
+    "*keybox.borderColor: ivory1", */
+    "*keybox.background: 		ivory1",
+    "*panel.background:			grey92",
     "*keyboard.background:		grey10",
-    "*save.dialog.background:		grey92",	/* good */
+    "*deskTop.background:		white",
+    "*deskEdge.background:		white",
+    "*save.dialog.background:		grey92",
     NULL
 };
 
@@ -610,7 +687,7 @@ static GC gc, invgc, holegc;
 
 static Widget container, ps_cardw, rs_cardw, posw_porth, posw;
 #define FEED_X	(ps_offset + (card_width * 2 / 3) - CELL_X(SLAM_COL))
-#define FEED_Y 	(BUTTON_GAP + POSW_HEIGHT - card_height)
+#define FEED_Y 	(CHANNEL_TFRAME - 3 - CARD_HEIGHT)
 
 static Dimension card_width, card_height;
 static Dimension hole_width, hole_height;
@@ -667,6 +744,11 @@ define_widgets(void)
     Pixmap column_indicator;
     Pixmap arrow;
     Position sx;
+    Position sp1, sp2;
+    Widget base;
+    Widget channel;
+    Widget keybox;
+    Widget keyboard;
     XpmAttributes attributes;
     static char translations[] = "\
 	<Key>Left:	Left()\n\
@@ -721,9 +803,12 @@ define_widgets(void)
     hole_width = attributes.width;
     hole_height = attributes.height;
     w = card_width + 2*CARD_AIR;
+#if 0
     h = BUTTON_GAP + POSW_HEIGHT +
 	SWITCH_SKIP + card_height + 2*CARD_AIR + 2*BUTTON_GAP + 2*BUTTON_BW +
-	BUTTON_HEIGHT + POWER_GAP + POWER_HEIGHT;
+	BUTTON_HEIGHT + POWER_GAP + CARDIMG_MENU_HEIGHT;
+#endif
+    h = TOTAL_HEIGHT;
     if (appres.read) {
 	ps_offset = w;
     } else {
@@ -800,9 +885,19 @@ define_widgets(void)
 	XtNborderWidth, 0,
 	NULL);
 
+    /* Add the channel. */
+    channel = XtVaCreateManagedWidget(
+	"channel", compositeWidgetClass, container,
+	XtNwidth, ps_offset + w,
+	XtNheight, CHANNEL_HEIGHT,
+	XtNx, CHANNEL_X,
+	XtNy, CHANNEL_Y,
+	XtNborderWidth, 0,
+	NULL);
+
     /* Create the cards. */
     ps_cardw = XtVaCreateManagedWidget(
-	"card", compositeWidgetClass, container,
+	"card", compositeWidgetClass, channel,
 	XtNwidth, card_width,
 	XtNheight, card_height,
 	XtNx, FEED_X,
@@ -811,7 +906,7 @@ define_widgets(void)
 	XtNbackgroundPixmap, pixmap,
 	NULL);
     rs_cardw = XtVaCreateManagedWidget(
-	"card", compositeWidgetClass, container,
+	"card", compositeWidgetClass, channel,
 	XtNwidth, card_width,
 	XtNheight, card_height,
 	XtNx, FEED_X,
@@ -820,92 +915,57 @@ define_widgets(void)
 	XtNbackgroundPixmap, pixmap,
 	NULL);
 
-    /* Add the keyboard case. */
+    /* Add the desktop behind the keybox. */
     XtVaCreateManagedWidget(
-	"case", labelWidgetClass, container,
-	XtNwidth, w - 2*CARD_AIR,
-	XtNheight, h - (POSW_HEIGHT + card_height + 4*CARD_AIR),
-	XtNx, ps_offset,
-	XtNy, POSW_HEIGHT + card_height + 2*CARD_AIR,
-	XtNborderWidth, CARD_AIR,
-	XtNlabel, "",
-	NULL);
-
-    /* Create the card image menu. */
-    cardimg_menu_init(ccardimg, container,
-	    /* x */ ps_offset + w - BUTTON_GAP - CARDIMG_MENU_WIDTH,
-	    /* y */ BUTTON_GAP + POSW_HEIGHT + CARD_AIR + card_height +
-			CARD_AIR);
-
-    /* Create the character set menu. */
-    charset_menu_init(ccharset, container,
-	    /* x */ ps_offset + w - BUTTON_GAP - CARDIMG_MENU_WIDTH -
-			BUTTON_GAP - CARDIMG_MENU_WIDTH,
-	    /* y */ BUTTON_GAP + POSW_HEIGHT + CARD_AIR + card_height +
-			CARD_AIR);
-
-    /* Add the power button. */
-    XtVaCreateManagedWidget(
-	"base", labelWidgetClass, container,
-	XtNwidth, ps_offset + w,
-	XtNheight, POWER_HEIGHT + 2*CARD_AIR,
+	"deskTop", compositeWidgetClass, container,
+	XtNwidth, ps_offset - 1,
+	XtNheight, KEYBOX_HEIGHT,
 	XtNx, -1,
-	XtNy, h - POWER_HEIGHT - 2*CARD_AIR,
-	XtNlabel, "",
+	XtNy, KEYBOX_Y,
+	XtNborderWidth, 1,
 	NULL);
-    if (XpmCreatePixmapFromData(display, XtWindow(container), flipper_on_xpm,
-		    &flipper_on, &shapemask, &attributes) != XpmSuccess) {
-	    XtError("XpmCreatePixmapFromData failed");
-    }
-    if (XpmCreatePixmapFromData(display, XtWindow(container), flipper_off_xpm,
-		    &flipper_off, &shapemask, &attributes) != XpmSuccess) {
-	    XtError("XpmCreatePixmapFromData failed");
-    }
-    power_widget = XtVaCreateManagedWidget(
-	"power", commandWidgetClass, container,
-	XtNbackgroundPixmap, flipper_off,
-	XtNlabel, "",
-	XtNwidth, POWER_WIDTH,
-	XtNheight, POWER_HEIGHT,
-	XtNx, ps_offset + w - BUTTON_GAP - POWER_WIDTH - 2*BUTTON_BW,
-	XtNy, h - CARD_AIR - POWER_HEIGHT,
+
+    /* Add the keyboard case. */
+    keybox = XtVaCreateManagedWidget(
+	"keybox", compositeWidgetClass, container,
+	XtNwidth, KEYBOX_WIDTH,
+	XtNheight, KEYBOX_HEIGHT,
+	XtNx, ps_offset,
+	XtNy, KEYBOX_Y,
 	XtNborderWidth, 0,
-	XtNhighlightThickness, 0,
-	NULL
-    );
-    XtAddCallback(power_widget, XtNcallback, power_callback, NULL);
+	NULL);
 
-    /* Add the save button. */
-    key_init(&save_key, "SAVE", container,
-	    BUTTON_GAP,
-	    h - CARD_AIR - POWER_HEIGHT - POWER_GAP - KEY_HEIGHT,
-	    save_xpm, save_pressed_xpm,
-	    save_key_backend);
+    /* 'sx' is where the leftmost key starts. */
+    sx = (KEYBOX_WIDTH - 8*SWITCH_WIDTH - 7*BUTTON_GAP) / 2;
 
-    /* Add the drop button. */
-    key_init(&drop_key, "DROP", container,
-	    BUTTON_GAP + KEY_WIDTH,
-	    h - CARD_AIR - POWER_HEIGHT - POWER_GAP - KEY_HEIGHT,
-	    drop_xpm, drop_pressed_xpm,
-	    drop_key_backend);
-
-    /* Add the FEED button. */
-    key_init(&feed_key, "FEED", container,
-	    w - (BUTTON_GAP + KEY_WIDTH + 2*BUTTON_BW),
-	    h - CARD_AIR - POWER_HEIGHT - POWER_GAP - KEY_HEIGHT,
-	    feed_xpm, feed_pressed_xpm,
-	    feed_key_backend);
-    XtVaSetValues(feed_key.widget, XtNsensitive, mode == M_INTERACTIVE,
-	    NULL);
-
-    /* Add the REL button. */
-    key_init(&rel_key, "REL", container,
-	    w - (BUTTON_GAP + KEY_WIDTH + 2*BUTTON_BW + KEY_WIDTH),
-	    h - CARD_AIR - POWER_HEIGHT - POWER_GAP - KEY_HEIGHT,
-	    rel_xpm, rel_pressed_xpm,
-	    rel_key_backend);
-    XtVaSetValues(rel_key.widget, XtNsensitive, mode == M_INTERACTIVE,
-	    NULL);
+    /* Add the silver panels behind the switches. */
+    sp1 = ((SWITCH_WIDTH + BUTTON_GAP) * 3) / 2;
+    XtVaCreateManagedWidget(
+	"panel", compositeWidgetClass, keybox,
+	XtNx, KEYBOX_BORDER,
+	XtNy, KEYBOX_BORDER,
+	/*XtNwidth, KEYBOX_WIDTH - 2*KEYBOX_BORDER - 2,*/
+	XtNwidth, sx + sp1 - 2,
+	XtNheight, SWITCHES_HEIGHT - 2,
+	XtNborderWidth, 1,
+	NULL);
+    sp2 = (SWITCH_WIDTH + BUTTON_GAP) * 5;
+    XtVaCreateManagedWidget(
+	"panel", compositeWidgetClass, keybox,
+	XtNx, KEYBOX_BORDER + sx + sp1 - 1,
+	XtNy, KEYBOX_BORDER,
+	XtNwidth, sp2 - 2,
+	XtNheight, SWITCHES_HEIGHT - 2,
+	XtNborderWidth, 1,
+	NULL);
+    XtVaCreateManagedWidget(
+	"panel", compositeWidgetClass, keybox,
+	XtNx, KEYBOX_BORDER + sx + sp1 + sp2 - 2,
+	XtNy, KEYBOX_BORDER,
+	XtNwidth, KEYBOX_WIDTH - 2*KEYBOX_BORDER - (sx + sp1 + sp2),
+	XtNheight, SWITCHES_HEIGHT - 2,
+	XtNborderWidth, 1,
+	NULL);
 
     /* Add the switches. */
     if (XpmCreatePixmapFromData(display, XtWindow(container), off60_xpm,
@@ -916,16 +976,15 @@ define_widgets(void)
 		    &toggle_on, &shapemask, &attributes) != XpmSuccess) {
 	    XtError("XpmCreatePixmapFromData failed");
     }
-    sx = (w - 8*SWITCH_WIDTH - 7*BUTTON_GAP) / 2;
     for (i = 0; i < 8; i++) {
 	if (i == 1 || i == 6)
 	    continue;
 	toggles[i].on = (i < 7);
 	toggles[i].w = XtVaCreateManagedWidget(
-	    "switchcmd", commandWidgetClass, container,
+	    "switchcmd", commandWidgetClass, keybox,
 	    XtNwidth, SWITCH_WIDTH,
-	    XtNx, ps_offset + sx + i*(SWITCH_WIDTH + BUTTON_GAP),
-	    XtNy, h - BUTTON_GAP - POWER_HEIGHT - POWER_GAP - SWITCH_HEIGHT - 30,
+	    XtNx, sx + i*(SWITCH_WIDTH + BUTTON_GAP),
+	    XtNy, SWITCHES_TFRAME + 5,
 	    XtNheight, SWITCH_HEIGHT,
 	    XtNborderWidth, 0,
 	    XtNlabel, "",
@@ -935,40 +994,133 @@ define_widgets(void)
 	XtAddCallback(toggles[i].w, XtNcallback, toggle_callback,
 		&toggles[i]);
 	(void) XtVaCreateManagedWidget(
-	    "switch", labelWidgetClass, container,
+	    "switch", labelWidgetClass, keybox,
 	    XtNwidth, SWITCH_WIDTH,
-	    XtNx, ps_offset + sx + i*(SWITCH_WIDTH + BUTTON_GAP),
-	    XtNy, h - BUTTON_GAP - POWER_HEIGHT - POWER_GAP - SWITCH_HEIGHT - 40,
+	    XtNx, sx + i*(SWITCH_WIDTH + BUTTON_GAP),
+	    XtNy, SWITCHES_TFRAME - 5,
 	    XtNborderWidth, 0,
 	    XtNlabel, top_label[i],
 	    NULL);
 	(void) XtVaCreateManagedWidget(
-	    "switch", labelWidgetClass, container,
+	    "switch", labelWidgetClass, keybox,
 	    XtNwidth, SWITCH_WIDTH,
-	    XtNx, ps_offset + sx + i*(SWITCH_WIDTH + BUTTON_GAP),
-	    XtNy, h - BUTTON_GAP - POWER_HEIGHT - POWER_GAP - 35,
+	    XtNx, sx + i*(SWITCH_WIDTH + BUTTON_GAP),
+	    XtNy, SWITCHES_TFRAME + 5 + SWITCH_HEIGHT,
 	    XtNborderWidth, 0,
 	    XtNlabel, bottom_label1[i],
 	    NULL);
 	if (bottom_label2[i] != NULL)
 	    (void) XtVaCreateManagedWidget(
-		"switch", labelWidgetClass, container,
+		"switch", labelWidgetClass, keybox,
 		XtNwidth, SWITCH_WIDTH,
-		XtNx, ps_offset + sx + i*(SWITCH_WIDTH + BUTTON_GAP),
-		XtNy, h - BUTTON_GAP - POWER_HEIGHT - POWER_GAP - 25,
+		XtNx, sx + i*(SWITCH_WIDTH + BUTTON_GAP),
+		XtNy, SWITCHES_TFRAME + 5 + SWITCH_HEIGHT + 10,
 		XtNborderWidth, 0,
 		XtNlabel, bottom_label2[i],
 		NULL);
 	if (bottom_label3[i] != NULL)
 	    (void) XtVaCreateManagedWidget(
-		"switch", labelWidgetClass, container,
+		"switch", labelWidgetClass, keybox,
 		XtNwidth, SWITCH_WIDTH,
-		XtNx, ps_offset + sx + i*(SWITCH_WIDTH + BUTTON_GAP),
-		XtNy, h - BUTTON_GAP - POWER_HEIGHT - POWER_GAP - 15,
+		XtNx, sx + i*(SWITCH_WIDTH + BUTTON_GAP),
+		XtNy, SWITCHES_TFRAME + 5 + SWITCH_HEIGHT + 20,
 		XtNborderWidth, 0,
 		XtNlabel, bottom_label3[i],
 		NULL);
     }
+
+    /* Add the keyboard area. */
+    keyboard = XtVaCreateManagedWidget(
+	"keyboard", compositeWidgetClass, keybox,
+	XtNwidth, KEYBOARD_WIDTH,
+	XtNheight, KEYBOARD_HEIGHT,
+	XtNx, KEYBOARD_X,
+	XtNy, KEYBOARD_Y,
+	XtNborderWidth, 0,
+	NULL);
+    keyboard = keyboard; /* for now */
+
+    /* Add the SAVE key to the keyboard. */
+    key_init(&save_key, "SAVE", keyboard,
+	    KEYBOARD_LRFRAME, /* x */
+	    KEYBOARD_TFRAME,  /* y */
+	    save_xpm, save_pressed_xpm,
+	    save_key_backend);
+
+    /* Add the DROP key to the keyboard. */
+    key_init(&drop_key, "DROP", keyboard,
+	    KEYBOARD_LRFRAME + KEY_WIDTH, /* x */
+	    KEYBOARD_TFRAME,  /* y */
+	    drop_xpm, drop_pressed_xpm,
+	    drop_key_backend);
+
+    /* Add the FEED key to the keyboard. */
+    key_init(&feed_key, "FEED", keyboard,
+	    KEYBOARD_WIDTH - KEYBOARD_LRFRAME - KEY_WIDTH, /* x */
+	    KEYBOARD_TFRAME,  /* y */
+	    feed_xpm, feed_pressed_xpm,
+	    feed_key_backend);
+    XtVaSetValues(feed_key.widget, XtNsensitive, mode == M_INTERACTIVE,
+	    NULL);
+
+    /* Add the REL key to the keyboard. */
+    key_init(&rel_key, "REL", keyboard,
+	    KEYBOARD_WIDTH - KEYBOARD_LRFRAME - KEY_WIDTH - KEY_WIDTH, /* x */
+	    KEYBOARD_TFRAME,  /* y */
+	    rel_xpm, rel_pressed_xpm,
+	    rel_key_backend);
+    XtVaSetValues(rel_key.widget, XtNsensitive, mode == M_INTERACTIVE,
+	    NULL);
+
+    /* Create the desk edge. */
+    XtVaCreateManagedWidget(
+	"deskEdge", compositeWidgetClass, container,
+	XtNwidth, ps_offset + w,
+	XtNheight, DESK_THICKNESS,
+	XtNx, -1,
+	XtNy, DESK_Y,
+	XtNborderWidth, DESK_FRAME,
+	NULL);
+
+    /* Create the base. */
+    base = XtVaCreateManagedWidget(
+	"base", compositeWidgetClass, container,
+	XtNwidth, ps_offset + w,
+	XtNheight, CARDIMG_MENU_HEIGHT + 2*CARD_AIR,
+	XtNx, -1,
+	XtNy, BASE_Y,
+	NULL);
+
+    /* Add the power button to the base. */
+    if (XpmCreatePixmapFromData(display, XtWindow(container), flipper_on_xpm,
+		    &flipper_on, &shapemask, &attributes) != XpmSuccess) {
+	    XtError("XpmCreatePixmapFromData failed");
+    }
+    if (XpmCreatePixmapFromData(display, XtWindow(container), flipper_off_xpm,
+		    &flipper_off, &shapemask, &attributes) != XpmSuccess) {
+	    XtError("XpmCreatePixmapFromData failed");
+    }
+    power_widget = XtVaCreateManagedWidget(
+	"power", commandWidgetClass, base,
+	XtNbackgroundPixmap, flipper_off,
+	XtNlabel, "",
+	XtNwidth, POWER_WIDTH,
+	XtNheight, POWER_HEIGHT,
+	XtNx, ps_offset + w - (CARD_AIR + POWER_WIDTH),
+	XtNy, CARD_AIR,
+	XtNborderWidth, 0,
+	XtNhighlightThickness, 0,
+	NULL
+    );
+    XtAddCallback(power_widget, XtNcallback, power_callback, NULL);
+
+    /* Create the character and card image menus on the base. */
+    charset_menu_init(ccharset, base,
+	    CARD_AIR,	/* x */
+	    CARD_AIR);	/* y */
+    cardimg_menu_init(ccardimg, base,
+	    CARD_AIR + CARDIMG_MENU_WIDTH + CARD_AIR, /* x */
+	    CARD_AIR);	/* y */
 
     /* Create graphics contexts for drawing. */
     xgcv.foreground = appres.foreground;
@@ -1677,8 +1829,8 @@ feed_key_backend(kpkey_t *key)
 
 /* Initialize a key. */
 static void
-key_init(kpkey_t *key, const char *name, Widget container, int x, int y,
-	char *normal_pixmap_src[], char *pressed_pixmap_src[],
+key_init(kpkey_t *key, const char *name, Widget container, Position x,
+	Position y, char *normal_pixmap_src[], char *pressed_pixmap_src[],
 	key_backend_t backend)
 {
     Pixmap shapemask;
@@ -1705,7 +1857,7 @@ key_init(kpkey_t *key, const char *name, Widget container, int x, int y,
 	    XtNbackgroundPixmap, key->normal_pixmap,
 	    XtNheight, KEY_HEIGHT,
 	    XtNwidth, KEY_WIDTH,
-	    XtNx, ps_offset + x,
+	    XtNx, x,
 	    XtNy, y,
 	    XtNhighlightThickness, 0,
 	    NULL);
