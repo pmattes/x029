@@ -1926,8 +1926,8 @@ typedef enum {
     DS_SPACE,	/* need to space over the rest of the card */
     DS_EOF	/* done */
 } demo_state_t;
-static const char *bs_name[] = { "READ", "CHAR", "SPACE", "EOF" };
-static demo_state_t bs = DS_READ;
+static const char *ds_name[] = { "READ", "CHAR", "SPACE", "EOF" };
+static demo_state_t ds = DS_READ;
 XtInputId read_id = 0;
 
 /* Input is now readable. */
@@ -1956,9 +1956,9 @@ demo_fsm(void)
     }
 
     do {
-	dbg_printf("demo_fsm: %s\n", bs_name[bs]);
+	dbg_printf("demo_fsm: %s\n", ds_name[ds]);
 
-	switch (bs) {
+	switch (ds) {
 
 	case DS_READ:
 	    /* Keep munching on the same buffer. */
@@ -1977,7 +1977,7 @@ demo_fsm(void)
 		    demofd = -1;
 
 		    /* Next, exit. */
-		    bs = DS_EOF;
+		    ds = DS_EOF;
 		    break;
 		}
 		if (nr < 0) {
@@ -1997,7 +1997,7 @@ demo_fsm(void)
 	    }
 
 	    /* Next, start munching on it. */
-	    bs = DS_CHAR;
+	    ds = DS_CHAR;
 	    break;
 
 	case DS_CHAR:
@@ -2028,7 +2028,7 @@ demo_fsm(void)
 		    enq_event(PRESS_REL, 0, False, VERY_SLOW);
 		else
 		    enq_event(PRESS_REL, 0, False, 0);
-		bs = DS_SPACE;
+		ds = DS_SPACE;
 		break;
 	    }
 	    add_char(c);
@@ -2038,7 +2038,7 @@ demo_fsm(void)
 		 *
 		 * Go read some more.
 		 */
-		bs = DS_READ;
+		ds = DS_READ;
 		continue;
 	    }
 	    if (col >= (appres.autonumber? (N_COLS - 1 - 8):
@@ -2053,27 +2053,16 @@ demo_fsm(void)
 	    break;
 
 	case DS_SPACE:
-	    dbg_printf(" col = %d\n", col);
-
-	    if (col >= N_COLS - 1) {
-		/* End of card.  Release it. */
-		do_release(FAST);
-
-		/*
-		 * In remote control mode, create a new card.
-		 * In demo mode, wait for data before
-		 * doing it.
-		 */
-		if (mode == M_REMOTECTL) {
-		    do_feed(False);
-		}
-
-		bs = DS_READ;
-		break;
+	    do_release(FAST);
+	    /*
+	     * In remote control mode, create a new card.
+	     * In demo mode, wait for data before
+	     * doing it.
+	     */
+	    if (mode == M_REMOTECTL) {
+		do_feed(False);
 	    }
-
-	    /* Add a space. */
-	    add_char(' ');
+	    ds = DS_READ;
 	    break;
 
 	case DS_EOF:
