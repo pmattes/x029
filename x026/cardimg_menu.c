@@ -9,19 +9,8 @@
  * x029 card image menu.
  */
 
-#include <stdio.h>
-#include <string.h>
-#include <ctype.h>
-#include <errno.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <stdarg.h>
 #include <X11/Intrinsic.h>
 #include <X11/StringDefs.h>
-#include <X11/Core.h>
-#include <X11/Shell.h>
-#include <X11/Xatom.h>
 #include <X11/Xaw/Command.h>
 #include <X11/xpm.h>
 

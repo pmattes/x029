@@ -10,25 +10,9 @@
  */
 
 #include <stdio.h>
-#include <string.h>
-#include <ctype.h>
-#include <errno.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <stdarg.h>
 #include <assert.h>
 #include <sys/time.h>
-#include <inttypes.h>
 #include <X11/Intrinsic.h>
-#include <X11/StringDefs.h>
-#include <X11/Core.h>
-#include <X11/Shell.h>
-#include <X11/Xatom.h>
-#include <X11/Xaw/Command.h>
-#include <X11/Xaw/Dialog.h>
-#include <X11/Xaw/Porthole.h>
-#include <X11/xpm.h>
 
 #include "jones.h"		/* file format definitions */
 #include "charset.h"		/* character set module */
