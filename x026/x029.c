@@ -150,6 +150,8 @@ static charset_t	ccharset = NULL;
 static cardimg_t	ccardimg = NULL;
 static cardimg_t	ncardimg = NULL;
 
+static Dimension	ps_offset;
+
 int			demofd = -1;
 
 /* Mode: interactive versus demo. */
@@ -194,6 +196,7 @@ typedef struct {
     Boolean	typeahead;
     Boolean 	remotectl;
     Boolean	empty;
+    Boolean	read;
     Boolean	help;
     Boolean 	debug;
 } AppRes, *AppResptr;
@@ -210,6 +213,7 @@ static XrmOptionDescRec options[]= {
     { "-card",		".card",	XrmoptionSepArg,	NULL },
     { "-demo",		".demoFile",	XrmoptionSepArg,	NULL },
     { "-remotectl",	".remoteCtl",	XrmoptionNoArg,		"True" },
+    { "-read",		".read",	XrmoptionNoArg,		"True" },
     { "-empty",		".empty", 	XrmoptionNoArg,		"True" },
     { "-026ftn",	".charset",	XrmoptionNoArg,		"bcd-h" },
     { "-026comm",	".charset",	XrmoptionNoArg,		"bcd-a" },
@@ -246,6 +250,8 @@ static XtResource resources[] = {
       offset(demofile), XtRString, NULL },
     { "remoteCtl", "RemoteCtl", XtRBoolean, sizeof(Boolean),
       offset(remotectl), XtRString, "False" },
+    { "read", "Read", XtRBoolean, sizeof(Boolean),
+      offset(read), XtRString, "False" },
     { "empty", "Empty", XtRBoolean, sizeof(Boolean),
       offset(empty), XtRString, "False" },
     { "debug", "Debug", XtRBoolean, sizeof(Boolean),
@@ -270,6 +276,7 @@ static String fallbacks[] = {
     "*font:		variable",
     "*cabinet:		grey92",
     "*cardColor:	ivory",
+    "*save.dialog.background:	grey92",
     NULL
 };
 
@@ -302,7 +309,7 @@ static XtActionsRec actions[] = {
     { "Confirm",	Confirm_action },
     { "Hover",		Hover_action },
     { "Hover2",		Hover2_action },
-    { "UnHover",	UnHover_action }
+    { "UnHover",	UnHover_action },
 };
 static int actioncount = XtNumber(actions);
 
@@ -692,10 +699,11 @@ define_widgets(void)
     h = BUTTON_GAP + POSW_HEIGHT +
 	SWITCH_SKIP + card_height + 2*CARD_AIR + 2*BUTTON_GAP + 2*BUTTON_BW +
 	BUTTON_HEIGHT + POWER_GAP + POWER_HEIGHT;
-    XtVaSetValues(container,
-	XtNwidth, w,
-	XtNheight, h,
-	NULL);
+    if (appres.read) {
+	ps_offset = w;
+    } else {
+	ps_offset = 0;
+    }
 
     /* Add the stacker count. */
     XtVaCreateManagedWidget(
@@ -731,7 +739,7 @@ define_widgets(void)
 	XtNwidth, POSW_WIDTH + ARROW_WIDTH,
 	XtNheight, POSW_HEIGHT,
 	XtNy, 0,
-	XtNx, posw_x,
+	XtNx, ps_offset + posw_x,
 	XtNlabel, "",
 	XtNborderWidth, 0,
 	NULL);
@@ -739,7 +747,7 @@ define_widgets(void)
 	"posw_porthole", portholeWidgetClass, container,
 	XtNwidth, POSW_INNER_WIDTH,
 	XtNheight, POSW_INNER_HEIGHT,
-	XtNx, posw_x + POSW_FRAME + ARROW_WIDTH,
+	XtNx, ps_offset + posw_x + POSW_FRAME + ARROW_WIDTH,
 	XtNy, POSW_TFRAME,
 	XtNborderWidth, 0,
 	NULL);
@@ -761,7 +769,7 @@ define_widgets(void)
 	"arrow", compositeWidgetClass, container,
 	XtNwidth, ARROW_WIDTH,
 	XtNheight, POSW_INNER_HEIGHT,
-	XtNx, posw_x + POSW_FRAME,
+	XtNx, ps_offset + posw_x + POSW_FRAME,
 	XtNy, POSW_TFRAME,
 	XtNbackgroundPixmap, arrow,
 	XtNborderWidth, 0,
@@ -769,20 +777,23 @@ define_widgets(void)
 
     /* Create the card image menu. */
     cardimg_menu_init(ccardimg, container,
-	    w - BUTTON_GAP - CARDIMG_MENU_WIDTH,
-	    BUTTON_GAP + POSW_HEIGHT + CARD_AIR + card_height + CARD_AIR);
+	    /* x */ ps_offset + w - BUTTON_GAP - CARDIMG_MENU_WIDTH,
+	    /* y */ BUTTON_GAP + POSW_HEIGHT + CARD_AIR + card_height +
+			CARD_AIR);
 
     /* Create the character set menu. */
     charset_menu_init(ccharset, container,
-	    w - BUTTON_GAP - CARDIMG_MENU_WIDTH - BUTTON_GAP - CARDIMG_MENU_WIDTH,
-	    BUTTON_GAP + POSW_HEIGHT + CARD_AIR + card_height + CARD_AIR);
+	    /* x */ ps_offset + w - BUTTON_GAP - CARDIMG_MENU_WIDTH -
+			BUTTON_GAP - CARDIMG_MENU_WIDTH,
+	    /* y */ BUTTON_GAP + POSW_HEIGHT + CARD_AIR + card_height +
+			CARD_AIR);
 
     /* Create the porthole within the container. */
     porth = XtVaCreateManagedWidget(
 	"porthole", portholeWidgetClass, container,
-	XtNwidth, card_width,
+	XtNwidth, card_width + 2 * CARD_AIR,
 	XtNheight, card_height,
-	XtNx, CARD_AIR,
+	XtNx, ps_offset,
 	XtNy, BUTTON_GAP + POSW_HEIGHT + CARD_AIR,
 	XtNborderWidth, 0,
 	NULL);
@@ -791,7 +802,7 @@ define_widgets(void)
     scrollw_column = SLAM_COL;
     scrollw = XtVaCreateManagedWidget(
 	"scroll", compositeWidgetClass, porth,
-	XtNwidth, card_width * 3,
+	XtNwidth, card_width * 4,
 	XtNheight, card_height * 4,
 	XtNx, SCROLLW_X(),
 	XtNy, -(2*card_height + TOP_PAD),
@@ -814,7 +825,7 @@ define_widgets(void)
     /* Add the power button. */
     XtVaCreateManagedWidget(
 	"powerDepression", labelWidgetClass, container,
-	XtNwidth, w,
+	XtNwidth, ps_offset + w,
 	XtNheight, POWER_HEIGHT + 2*CARD_AIR,
 	XtNx, -1,
 	XtNy, h - POWER_HEIGHT - 2*CARD_AIR,
@@ -834,7 +845,7 @@ define_widgets(void)
 	XtNlabel, "",
 	XtNwidth, POWER_WIDTH,
 	XtNheight, POWER_HEIGHT,
-	XtNx, w - BUTTON_GAP - POWER_WIDTH - 2*BUTTON_BW,
+	XtNx, ps_offset + w - BUTTON_GAP - POWER_WIDTH - 2*BUTTON_BW,
 	XtNy, h - CARD_AIR - POWER_HEIGHT,
 	XtNborderWidth, 0,
 	XtNhighlightThickness, 0,
@@ -891,7 +902,7 @@ define_widgets(void)
 	toggles[i].w = XtVaCreateManagedWidget(
 	    "switchcmd", commandWidgetClass, container,
 	    XtNwidth, SWITCH_WIDTH,
-	    XtNx, sx + i*(SWITCH_WIDTH + BUTTON_GAP),
+	    XtNx, ps_offset + sx + i*(SWITCH_WIDTH + BUTTON_GAP),
 	    XtNy, h - BUTTON_GAP - POWER_HEIGHT - POWER_GAP - SWITCH_HEIGHT - 30,
 	    XtNheight, SWITCH_HEIGHT,
 	    XtNborderWidth, 0,
@@ -904,7 +915,7 @@ define_widgets(void)
 	(void) XtVaCreateManagedWidget(
 	    "switch", labelWidgetClass, container,
 	    XtNwidth, SWITCH_WIDTH,
-	    XtNx, sx + i*(SWITCH_WIDTH + BUTTON_GAP),
+	    XtNx, ps_offset + sx + i*(SWITCH_WIDTH + BUTTON_GAP),
 	    XtNy, h - BUTTON_GAP - POWER_HEIGHT - POWER_GAP - SWITCH_HEIGHT - 40,
 	    XtNborderWidth, 0,
 	    XtNlabel, top_label[i],
@@ -912,7 +923,7 @@ define_widgets(void)
 	(void) XtVaCreateManagedWidget(
 	    "switch", labelWidgetClass, container,
 	    XtNwidth, SWITCH_WIDTH,
-	    XtNx, sx + i*(SWITCH_WIDTH + BUTTON_GAP),
+	    XtNx, ps_offset + sx + i*(SWITCH_WIDTH + BUTTON_GAP),
 	    XtNy, h - BUTTON_GAP - POWER_HEIGHT - POWER_GAP - 35,
 	    XtNborderWidth, 0,
 	    XtNlabel, bottom_label1[i],
@@ -921,7 +932,7 @@ define_widgets(void)
 	    (void) XtVaCreateManagedWidget(
 		"switch", labelWidgetClass, container,
 		XtNwidth, SWITCH_WIDTH,
-		XtNx, sx + i*(SWITCH_WIDTH + BUTTON_GAP),
+		XtNx, ps_offset + sx + i*(SWITCH_WIDTH + BUTTON_GAP),
 		XtNy, h - BUTTON_GAP - POWER_HEIGHT - POWER_GAP - 25,
 		XtNborderWidth, 0,
 		XtNlabel, bottom_label2[i],
@@ -930,7 +941,7 @@ define_widgets(void)
 	    (void) XtVaCreateManagedWidget(
 		"switch", labelWidgetClass, container,
 		XtNwidth, SWITCH_WIDTH,
-		XtNx, sx + i*(SWITCH_WIDTH + BUTTON_GAP),
+		XtNx, ps_offset + sx + i*(SWITCH_WIDTH + BUTTON_GAP),
 		XtNy, h - BUTTON_GAP - POWER_HEIGHT - POWER_GAP - 15,
 		XtNborderWidth, 0,
 		XtNlabel, bottom_label3[i],
@@ -952,13 +963,13 @@ define_widgets(void)
 
     /* Fix the size of the toplevel window. */
     XtVaSetValues(toplevel,
-	XtNwidth, w,
+	XtNwidth, ps_offset + w,
 	XtNheight, h,
-	XtNbaseWidth, w,
+	XtNbaseWidth, ps_offset + w,
 	XtNbaseHeight, h,
-	XtNminWidth, w,
+	XtNminWidth, ps_offset + w,
 	XtNminHeight, h,
-	XtNmaxWidth, w,
+	XtNmaxWidth, ps_offset + w,
 	XtNmaxHeight, h,
 	NULL);
 
@@ -1788,7 +1799,7 @@ key_init(kpkey_t *key, const char *name, Widget container, int x, int y,
 	    XtNbackgroundPixmap, key->normal_pixmap,
 	    XtNheight, KEY_HEIGHT,
 	    XtNwidth, KEY_WIDTH,
-	    XtNx, x,
+	    XtNx, ps_offset + x,
 	    XtNy, y,
 	    XtNhighlightThickness, 0,
 	    NULL);
@@ -1853,7 +1864,7 @@ do_release(int delay)
     }
 
     /* Scroll the card out of the punch station. */
-    for (i = 0; i < N_COLS/2 + 10; i++) {
+    for (i = 0; i < N_COLS/2 + 12; i++) {
 	enq_event(PAN_RIGHT, 0, False, delay);
     }
 
