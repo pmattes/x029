@@ -120,17 +120,20 @@ harvard	Harvard University
 pink	Plain pink
 .TE
 .TP
-\fB-demo\fP \fIfile\fP
+\fB\-demo\fP \fIfile\fP
 Demo mode: Read a text file and punch it.
 .TP
-\fB-demo -\fP
+\fB\-demo -\fP
 Demo mode: Read standard input and punch it.
 .TP
-\fB-remotectl\fP
+\fB\-remotectl\fP
 Demo mode: Read standard input incrementally.
 .TP
-\fB-empty\fP
+\fB\-empty\fP
 Start out empty, instead of automatically feeding the first card.
+.TP
+\fB\-read\fP
+Include the read station.
 .TP
 \fB\-026ftn\fP
 Alias for \fB-charset bcd-h\fP.

@@ -361,6 +361,8 @@ static void queued_PRESS_FEED(int);
 static void queued_PRESS_REL(int);
 static void queued_EMPTY(int);
 static void queued_STACK(int);
+static void queued_OFF(int);
+static void queued_CLEAR_SEQ(int);
 
 /* Other forward references. */
 static void define_widgets(void);
@@ -553,6 +555,12 @@ power_callback(Widget w, XtPointer client_data, XtPointer call_data)
     do_power_off();
 }
 
+static void
+queued_OFF(int ignored)
+{
+    do_power_off();
+}
+
 /* Definitions for the toggle switches. */
 
 static Pixmap toggle_on, toggle_off;
@@ -575,6 +583,9 @@ unclear_event(XtPointer data, XtIntervalId *id)
 static void
 clear_switch(void)
 {
+    XtVaSetValues(toggles[T_CLEAR].w, XtNbackgroundPixmap, toggle_on, NULL);
+    (void) XtAppAddTimeOut(appcontext, SLOW * 6, unclear_event, NULL);
+
     if (CARD_REGISTERED) {
 	do_release(VERY_FAST);
 	if (appres.read) {
@@ -602,10 +613,16 @@ toggle_callback(Widget w, XtPointer client_data, XtPointer call_data)
     if (t->on)
 	return;
     t->on = !t->on;
-    XtVaSetValues(w, XtNbackgroundPixmap, t->on? toggle_on: toggle_off, NULL);
-    (void) XtAppAddTimeOut(appcontext, SLOW * 6, unclear_event, NULL);
 
     clear_switch();
+}
+
+/* Turn off the auto-feed switch. */
+static void
+auto_feed_off(void)
+{
+    XtVaSetValues(toggles[T_AUTO_FEED].w, XtNbackgroundPixmap, toggle_off,
+	    NULL);
 }
 
 /* Card-image data structures. */
@@ -1500,7 +1517,9 @@ enum evtype {
     PRESS_FEED,
     PRESS_REL,
     EMPTY,
-    STACK
+    STACK,
+    OFF,
+    CLEAR_SEQ
 };
 void (*eq_fn[])(int) = {
     queued_DUMMY,
@@ -1524,7 +1543,9 @@ void (*eq_fn[])(int) = {
     queued_PRESS_FEED,
     queued_PRESS_REL,
     queued_EMPTY,
-    queued_STACK
+    queued_STACK,
+    queued_OFF,
+    queued_CLEAR_SEQ
 };
 char *eq_name[] = {
     "DUMMY",
@@ -1548,7 +1569,9 @@ char *eq_name[] = {
     "PRESS_FEED",
     "PRESS_REL",
     "EMPTY",
-    "STACK"
+    "STACK",
+    "OFF",
+    "CLEAR_SEQ"
 };
 typedef struct event {
     struct event *next;
@@ -1633,6 +1656,7 @@ deq_event(XtPointer data, XtIntervalId *id)
      * Otherwise, see if the demo FSM needs cranking.
      */
     if (eq_count) {
+	dbg_printf("adding timeout(%d)\n", eq_first->delay);
 	(void) XtAppAddTimeOut(appcontext, eq_first->delay, deq_event, NULL);
     } else {
 	if (mode != M_INTERACTIVE) {
@@ -2305,11 +2329,34 @@ demo_fsm(void)
 
 	case DS_EOF:
 	    /* Done. */
-	    do_power_off();
+	    auto_feed_off();
+	    enq_event(CLEAR_SEQ, 0, False, SLOW * 3);
 	    break;
 	}
     } while (eq_first == NULL && power_on);
 
+}
+
+/*
+ * The shutdown sequence for demos.
+ */
+static void
+queued_CLEAR_SEQ(int ignored)
+{
+    /*
+     * Hit the clear switch, which will enqueue operations to scroll the
+     * card off of the read station.
+     */
+    clear_switch();
+
+    /* Enqueue the OFF operation after that. */
+    enq_event(OFF, 0, False, SLOW * 3);
+
+    /*
+     * Enqueue a long dummy operation, to give the OFF time to run and to
+     * keep the demo FSM from being called again.
+     */
+    enq_event(DUMMY, 0, False, 60 * 1000);
 }
 
 /* Accessor functions for appres. */
