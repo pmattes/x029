@@ -18,6 +18,8 @@
 #include <fcntl.h>
 #include <stdarg.h>
 #include <assert.h>
+#include <sys/time.h>
+#include <inttypes.h>
 #include <X11/Intrinsic.h>
 #include <X11/StringDefs.h>
 #include <X11/Core.h>
@@ -1625,11 +1627,26 @@ dump_queue(const char *when)
     printf("\n");
 }
 
+static struct timeval tv_set;
+
 /* Run the event at the front of the queue. */
 static void
 deq_event(XtPointer data, XtIntervalId *id)
 {
     event_t *e;
+    struct timeval tv;
+    long waited;
+
+    gettimeofday(&tv, NULL);
+    waited = (((tv.tv_sec - tv_set.tv_sec) * 1000000) +
+	       (tv.tv_usec - tv_set.tv_usec)) / 1000;
+    dbg_printf("deq_event waited %ldms\n", waited);
+    if (waited < eq_first->delay) {
+	eq_first->delay -= waited;
+	/*fprintf(stderr, "Arrrgh!\n");*/
+	(void) XtAppAddTimeOut(appcontext, eq_first->delay, deq_event, NULL);
+	return;
+    }
 
     if (!eq_count)
 	return;
@@ -1657,6 +1674,7 @@ deq_event(XtPointer data, XtIntervalId *id)
      */
     if (eq_count) {
 	dbg_printf("adding timeout(%d)\n", eq_first->delay);
+	gettimeofday(&tv_set, NULL);
 	(void) XtAppAddTimeOut(appcontext, eq_first->delay, deq_event, NULL);
     } else {
 	if (mode != M_INTERACTIVE) {
@@ -1674,6 +1692,8 @@ enq_event(enum evtype evtype, unsigned char param, Boolean interactive,
 
     if (evtype == DUMMY && delay == 0)
 	return True;
+    if (delay == 0)
+	delay = 1;
     e = (event_t *)XtMalloc(sizeof(*e));
     e->evtype = evtype;
     e->param = param;
@@ -1689,6 +1709,8 @@ enq_event(enum evtype evtype, unsigned char param, Boolean interactive,
     dump_queue("after enq");
 
     if (!eq_count++) {
+	dbg_printf("adding timeout(%d)\n", delay);
+	gettimeofday(&tv_set, NULL);
 	(void) XtAppAddTimeOut(appcontext, delay, deq_event, NULL);
     }
     return True;
@@ -2356,7 +2378,7 @@ queued_CLEAR_SEQ(int ignored)
      * Enqueue a long dummy operation, to give the OFF time to run and to
      * keep the demo FSM from being called again.
      */
-    enq_event(DUMMY, 0, False, 60 * 1000);
+    enq_event(DUMMY, 0, False, 6 * 1000);
 }
 
 /* Accessor functions for appres. */
@@ -2390,10 +2412,14 @@ static void
 dbg_printf(const char *format, ...)
 {
     va_list ap;
+    struct timeval tv;
 
     if (!appres.debug) {
 	return;
     }
+
+    gettimeofday(&tv, NULL);
+    printf("%lu.%06lu ", (unsigned long)tv.tv_sec, (unsigned long)tv.tv_usec);
 
     va_start(ap, format);
     vfprintf(stdout, format, ap);
