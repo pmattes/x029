@@ -74,8 +74,8 @@ char *bottom_label3[] = { "DUP", NULL, "SEL", NULL, NULL, NULL, NULL, NULL };
 #define FAST	25
 #define VERY_FAST 15
 
-#define SLAM_COL	15
-#define SLAM_TARGET_COL	40
+#define SLAM_COL	0
+#define SLAM_TARGET_COL	20
 
 #define CELL_X_NUM	693
 #define CELL_X_DENOM	80
@@ -583,9 +583,10 @@ static card_t *ccard;
 static int col = 0;
 static GC gc, invgc, holegc;
 
-static Widget container, porth, scrollw, cardw, posw_porth, posw;
+static Widget container, cardw, posw_porth, posw;
 static int scrollw_column;
-#define SCROLLW_X()	(-(LEFT_PAD+CELL_X(scrollw_column)))
+#define SCROLLW_X()	(ps_offset + (card_width * 2 / 3) - CELL_X(scrollw_column))
+#define SCROLLW_Y() 	(BUTTON_GAP + POSW_HEIGHT + CARD_AIR)
 
 static Dimension card_width, card_height;
 static Dimension hole_width, hole_height;
@@ -788,37 +789,15 @@ define_widgets(void)
 	    /* y */ BUTTON_GAP + POSW_HEIGHT + CARD_AIR + card_height +
 			CARD_AIR);
 
-    /* Create the porthole within the container. */
-    porth = XtVaCreateManagedWidget(
-	"porthole", portholeWidgetClass, container,
-	XtNwidth, card_width + 2 * CARD_AIR,
-	XtNheight, card_height,
-	XtNx, ps_offset,
-	XtNy, BUTTON_GAP + POSW_HEIGHT + CARD_AIR,
-	XtNborderWidth, 0,
-	NULL);
-
-    /* Create scrollable region within the porthole. */
+    /* Create the card. */
     scrollw_column = SLAM_COL;
-    scrollw = XtVaCreateManagedWidget(
-	"scroll", compositeWidgetClass, porth,
-	XtNwidth, card_width * 4,
-	XtNheight, card_height * 4,
-	XtNx, SCROLLW_X(),
-	XtNy, -(2*card_height + TOP_PAD),
-	XtNbackground, appres.cabinet,
-	XtNborderWidth, 0,
-	NULL);
-
-    /* Create the card itself. */
     cardw = XtVaCreateManagedWidget(
-	"card", compositeWidgetClass, scrollw,
+	"card", compositeWidgetClass, container,
 	XtNwidth, card_width,
 	XtNheight, card_height,
-	XtNx, card_width,
-	XtNy, card_height,
+	XtNx, SCROLLW_X(),
+	XtNy, -card_height,
 	XtNborderWidth, 0,
-	XtNbackground, appres.cardcolor,
 	XtNbackgroundPixmap, pixmap,
 	NULL);
 
@@ -1344,7 +1323,7 @@ static void
 queued_pan_left(int ignored)
 {
     scrollw_column--;
-    XtVaSetValues(scrollw, XtNx, SCROLLW_X(), NULL);
+    XtVaSetValues(cardw, XtNx, SCROLLW_X(), NULL);
 #if defined(SOUND) /*[*/
     soft_click();
 #endif /*]*/
@@ -1354,7 +1333,7 @@ static void
 queued_pan_right(int do_click)
 {
     scrollw_column++;
-    XtVaSetValues(scrollw, XtNx, SCROLLW_X(), NULL);
+    XtVaSetValues(cardw, XtNx, SCROLLW_X(), NULL);
 #if defined(SOUND) /*[*/
     if (do_click)
 	soft_click();
@@ -1366,9 +1345,9 @@ queued_pan_up(int ignored)
 {
     Dimension y;
 
-    XtVaGetValues(scrollw, XtNy, &y, NULL);
+    XtVaGetValues(cardw, XtNy, &y, NULL);
     y += CELL_HEIGHT;
-    XtVaSetValues(scrollw, XtNy, y, NULL);
+    XtVaSetValues(cardw, XtNy, y, NULL);
 }
 
 static void
@@ -1382,9 +1361,9 @@ static void
 queued_slam(int ignored)
 {
     scrollw_column = SLAM_COL;
-    XtVaSetValues(scrollw,
+    XtVaSetValues(cardw,
 	XtNx, SCROLLW_X(),
-	XtNy, -(2*card_height) + TOP_PAD,
+	XtNy, SCROLLW_Y() - card_height,
 	NULL);
 }
 
@@ -1885,7 +1864,7 @@ do_feed(Boolean keep_sequence)
 
     /* Scroll the new card down. */
     enq_event(SLAM, 0, False, SLOW);
-    for (i = 0; i <= N_ROWS; i++) {
+    for (i = 0; i <= N_ROWS + 1; i++) {
 	    enq_event(PAN_UP, 0, False, FAST);
     }
     for (i = SLAM_COL; i < SLAM_TARGET_COL; i++) {
