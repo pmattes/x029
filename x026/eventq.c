@@ -47,6 +47,7 @@ typedef struct event {
 int eq_count;
 
 static struct timeval tv_set;
+static Boolean to_set = False;
 
 static void (*eq_fn[NUM_EVENTS])(int) = {
     queued_DUMMY,
@@ -156,19 +157,16 @@ deq_event(XtPointer data, XtIntervalId *id)
     struct timeval tv;
     long waited;
 
+    assert(data == (XtPointer)eq_first);
+    assert(eq_count);
+    assert(to_set);
+
+    to_set = False;
+
     gettimeofday(&tv, NULL);
     waited = (((tv.tv_sec - tv_set.tv_sec) * 1000000) +
 	       (tv.tv_usec - tv_set.tv_usec)) / 1000;
-    dbg_printf("deq_event waited %ldms\n", waited);
-    if (waited < eq_first->delay) {
-	eq_first->delay -= waited;
-	/*fprintf(stderr, "Arrrgh!\n");*/
-	(void) XtAppAddTimeOut(appcontext, eq_first->delay, deq_event, NULL);
-	return;
-    }
-
-    if (!eq_count)
-	return;
+    assert(waited >= eq_first->delay);
 
     dump_queue("before deq");
 
@@ -191,10 +189,12 @@ deq_event(XtPointer data, XtIntervalId *id)
      * If there are more events, schedule the next one.
      * Otherwise, see if the demo FSM needs cranking.
      */
-    if (eq_count) {
+    if (eq_count && !to_set) {
 	dbg_printf("adding timeout(%d)\n", eq_first->delay);
 	gettimeofday(&tv_set, NULL);
-	(void) XtAppAddTimeOut(appcontext, eq_first->delay, deq_event, NULL);
+	(void) XtAppAddTimeOut(appcontext, eq_first->delay, deq_event,
+		(XtPointer)eq_first);
+	to_set = True;
     } else {
 	demo_fsm();
     }
@@ -209,8 +209,6 @@ enq_event(enum evtype evtype, unsigned char param, Boolean interactive,
 
     if (evtype == DUMMY && delay == 0)
 	return True;
-    if (delay == 0)
-	delay = 1;
     e = (event_t *)XtMalloc(sizeof(*e));
     e->evtype = evtype;
     e->param = param;
@@ -218,17 +216,19 @@ enq_event(enum evtype evtype, unsigned char param, Boolean interactive,
     e->delay = delay;
 
     e->next = NULL;
-    if (eq_first == NULL)
-	eq_first = e;
     if (eq_last != NULL)
 	eq_last->next = e;
+    else
+	eq_first = e;
     eq_last = e;
     dump_queue("after enq");
 
     if (!eq_count++) {
+	assert(to_set == False);
 	dbg_printf("adding timeout(%d)\n", delay);
 	gettimeofday(&tv_set, NULL);
-	(void) XtAppAddTimeOut(appcontext, delay, deq_event, NULL);
+	(void) XtAppAddTimeOut(appcontext, delay, deq_event, (XtPointer)e);
+	to_set = True;
     }
     return True;
 }

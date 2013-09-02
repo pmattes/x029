@@ -2178,24 +2178,24 @@ action_dbg(const char *name, Widget wid, XEvent *event, String *params,
 	return;
     }
 
-    printf("%s(widget %p", name, (void *)wid);
+    dbg_printf("%s(widget %p", name, (void *)wid);
     if (event) {
 	if (event->type == Expose) {
-	    dbg_printf(", Expose x=%d y=%d w=%d h=%d",
+	    dbg_cprintf(", Expose x=%d y=%d w=%d h=%d",
 		    event->xexpose.x,
 		    event->xexpose.y,
 		    event->xexpose.width,
 		    event->xexpose.height);
 	} else {
-	    dbg_printf(", event %d", event->type);
+	    dbg_cprintf(", event %d", event->type);
 	}
     } else {
-	dbg_printf(", no event");
+	dbg_cprintf(", no event");
     }
     for(i = 0; i < *num_params; i++) {
-	printf(", %s", params[i]);
+	dbg_cprintf(", %s", params[i]);
     }
-    printf(")\n");
+    dbg_cprintf(")\n");
 }
 
 void
