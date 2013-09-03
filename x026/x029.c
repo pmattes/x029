@@ -78,8 +78,8 @@ char *bottom_label3[] = { "DUP", NULL, "SEL", NULL, NULL, NULL, NULL, NULL };
 #define FAST	25
 #define VERY_FAST 15
 
-#define SLAM_COL	0
-#define SLAM_TARGET_COL	20
+#define SLAM_COL	40
+#define SLAM_TARGET_COL	52
 
 #define CELL_X_NUM	693
 #define CELL_X_DENOM	80
@@ -843,13 +843,17 @@ define_widgets(void)
 		&attributes) != XpmSuccess) {
 	    XtError("XpmCreatePixmapFromData failed");
     }
-    posw_x = STACKER_WIDTH + 2 * POSW_FRAME + BUTTON_GAP;
+    if (appres.read) {
+	posw_x = (card_width - (POSW_WIDTH + ARROW_WIDTH)) / 2;
+    } else {
+	posw_x = STACKER_WIDTH + 2 * POSW_FRAME + BUTTON_GAP;
+    }
     XtVaCreateManagedWidget(
 	"depression", labelWidgetClass, container,
 	XtNwidth, POSW_WIDTH + ARROW_WIDTH,
 	XtNheight, POSW_HEIGHT,
 	XtNy, 0,
-	XtNx, ps_offset + posw_x,
+	XtNx, posw_x,
 	XtNlabel, "",
 	XtNborderWidth, 0,
 	NULL);
@@ -857,7 +861,7 @@ define_widgets(void)
 	"posw_porthole", portholeWidgetClass, container,
 	XtNwidth, POSW_INNER_WIDTH,
 	XtNheight, POSW_INNER_HEIGHT,
-	XtNx, ps_offset + posw_x + POSW_FRAME + ARROW_WIDTH,
+	XtNx, posw_x + POSW_FRAME + ARROW_WIDTH,
 	XtNy, POSW_TFRAME,
 	XtNborderWidth, 0,
 	NULL);
@@ -879,7 +883,7 @@ define_widgets(void)
 	"arrow", compositeWidgetClass, container,
 	XtNwidth, ARROW_WIDTH,
 	XtNheight, POSW_INNER_HEIGHT,
-	XtNx, ps_offset + posw_x + POSW_FRAME,
+	XtNx, posw_x + POSW_FRAME,
 	XtNy, POSW_TFRAME,
 	XtNbackgroundPixmap, arrow,
 	XtNborderWidth, 0,
@@ -1925,7 +1929,7 @@ do_release(int delay)
      * Scroll the card out of the punch station.
      * XXX: The end column is a magic number.
      */
-    for (i = 0; i < N_COLS/2 + 16; i++) {
+    for (i = 0; i < 22; i++) {
 	enq_event(PAN_RIGHT_BOTH, 0, False, delay);
     }
 
