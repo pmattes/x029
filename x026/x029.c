@@ -1808,7 +1808,7 @@ drop_key_backend(kpkey_t *key)
      * Scroll the print station card off to the right.
      * XXX: Another magic number.
      */
-    for (i = 0; i < N_COLS/2 + 12; i++) {
+    for (i = 0; i < 87; i++) {
 	enq_event(PAN_LEFT_PRINT, 0, False, FAST);
     }
 
