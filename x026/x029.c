@@ -466,6 +466,7 @@ usage(void)
   -demo -          Read stdin and punch it\n\
   -remotectl       Read stdin incrementally\n\
   -empty           Don't feed in a card at start-up\n\
+  -noread          Don't display the read station\n\
   -help            Display this text\n");
     exit(1);
 }
