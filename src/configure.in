@@ -1,0 +1,86 @@
+dnl Copyright (c) 2000-2025 Paul Mattes.
+dnl All rights reserved.
+dnl 
+dnl Redistribution and use in source and binary forms, with or without
+dnl modification, are permitted provided that the following conditions
+dnl are met:
+dnl     * Redistributions of source code must retain the above copyright
+dnl       notice, this list of conditions and the following disclaimer.
+dnl     * Redistributions in binary form must reproduce the above copyright
+dnl       notice, this list of conditions and the following disclaimer in the
+dnl       documentation and/or other materials provided with the distribution.
+dnl     * Neither the name of Paul Mattes nor his contributors may be used
+dnl       to endorse or promote products derived from this software without
+dnl       specific prior written permission.
+dnl 
+dnl THIS SOFTWARE IS PROVIDED BY PAUL MATTES "AS IS" AND ANY EXPRESS
+dnl OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+dnl WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+dnl DISCLAIMED. IN NO EVENT SHALL PAUL MATTES BE LIABLE FOR ANY DIRECT,
+dnl INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+dnl (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+dnl SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+dnl HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+dnl STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
+dnl IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+dnl POSSIBILITY OF SUCH DAMAGE.
+
+dnl Process this file with autoconf to produce a configure script.
+AC_INIT([x029],[2.0])
+AC_PREREQ([2.71])
+AC_CONFIG_HEADERS([conf.h])
+
+dnl Checks for programs.
+AC_PROG_INSTALL
+AC_PROG_CC
+
+dnl Compute host-specific flags.
+AC_CANONICAL_HOST
+case "$host_os" in
+solaris2*)	CPPFLAGS="$CPPFLAGS -D__EXTENSIONS__"
+		;;
+darwin*)	CCOPTIONS="$CCOPTIONS -no-cpp-precomp -Wno-deprecated-declarations"
+		;;
+linux*)		CPPFLAGS="$CPPFLAGS -D_POSIX_SOURCE -D_BSD_SOURCE -D_DEFAULT_SOURCE -D_XOPEN_SOURCE"
+		;;
+esac
+if test "$GCC" = yes
+then	# Add common gcc options, plus flags for dependency generation.
+    	CCOPTIONS="$CCOPTIONS -Wall -Wsign-compare -std=c99 -pedantic -Wno-variadic-macros -MMD -MP"
+fi
+AC_SUBST(host)
+AC_SUBST(CCOPTIONS)
+
+dnl Checks for header files.
+
+dnl Check for X
+AC_PATH_X
+if test "$no_x" = "yes"; then AC_MSG_ERROR('Cannot find X utilities or libraries'); fi
+if test -n "$x_includes"
+then	CPPFLAGS="$CPPFLAGS -I$x_includes"
+fi
+if test -n "$x_libraries"
+then	LDFLAGS="$LDFLAGS -L$x_libraries"
+fi
+
+dnl Check for other libraries.
+dnl Note that the order here is important.  The last libraries should appear
+dnl first, so that objects in them can be used by subsequent libraries.
+AC_CHECK_HEADERS(X11/Shell.h, , AC_MSG_ERROR("Cannot find X11 header files"))
+AC_CHECK_HEADERS(X11/Xaw/Dialog.h, , AC_MSG_ERROR("Cannot find Xaw header files"))
+AC_SEARCH_LIBS(XFillRectangle, X11, , AC_MSG_ERROR("Cannot find libX11"))
+AC_SEARCH_LIBS(XtVaSetValues, Xt, , AC_MSG_ERROR("Cannot find libXt"))
+AC_SEARCH_LIBS(XawInitializeWidgetSet, Xaw, , AC_MSG_ERROR("Cannot find libXaw"))
+AC_SEARCH_LIBS(XpmCreatePixmapFromData, Xpm, , AC_MSG_ERROR("Cannot find libXpm"))
+
+if test "$x_includes"
+then	XINC=-I$x_includes
+fi
+if test "$x_libraries"
+then	XLIB=-L$x_libraries
+fi
+AC_SUBST(XINC)
+AC_SUBST(XLIB)
+
+AC_CONFIG_FILES(Makefile Makefile.obj)
+AC_OUTPUT

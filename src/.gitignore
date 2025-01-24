@@ -1,0 +1,13 @@
+Makefile
+Makefile.obj
+*.o
+x029
+x029._man
+*.swp
+cscope.*
+autom4te.cache
+configure~
+*.d
+config.status
+config.log
+Makefile.bak

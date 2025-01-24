@@ -1,10 +1,28 @@
 /*
- * Copyright 1993, 1995, 2002, 2003, 2013 Paul Mattes.  All Rights Reserved.
- *   Permission to use, copy, modify, and distribute this software and its
- *   documentation for any purpose and without fee is hereby granted,
- *   provided that the above copyright notice appear in all copies and that
- *   both that copyright notice and this permission notice appear in
- *   supporting documentation.
+ * Copyright (c) 1993-2025 Paul Mattes.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright
+ *       notice, this list of conditions and the following disclaimer in the
+ *       documentation and/or other materials provided with the distribution.
+ *     * Neither the names of Paul Mattes, Jeff Sparkes, GTRC nor the names of
+ *       their contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY PAUL MATTES "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
+ * EVENT SHALL PAUL MATTES BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+ * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+ * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * x029 -- A Keypunch Simluator
  */
@@ -56,6 +74,8 @@
 #include "ci2.xpm"		/* column indicator */
 #include "arrow.xpm"		/* arrow */
 #include "x029.bm"		/* icon */
+
+#define VERSION "x029 2.0"
 
 enum {
     T_AUTO_SKIP_DUP,
@@ -274,6 +294,7 @@ typedef struct {
     Boolean	read;
     Boolean	help;
     Boolean 	debug;
+    Boolean	version;
 } AppRes, *AppResptr;
 
 static AppRes appres;
@@ -296,6 +317,7 @@ static XrmOptionDescRec options[]= {
     { "-EBCDIC",	".charset",	XrmoptionNoArg,		"ebcdic" },
     { "-debug",		".debug",	XrmoptionNoArg,		"True" },
     { "-help",		".help",	XrmoptionNoArg,		"True" },
+    { "-v",		".version",	XrmoptionNoArg,		"True" },
 };
 
 /* Resource list. */
@@ -333,6 +355,8 @@ static XtResource resources[] = {
       offset(debug), XtRString, "False" },
     { "help", "Help", XtRBoolean, sizeof(Boolean),
       offset(help), XtRString, "False" },
+    { "version", "Version", XtRBoolean, sizeof(Boolean),
+      offset(version), XtRString, "False" },
 };
 #undef offset
 
@@ -467,7 +491,8 @@ usage(void)
   -remotectl       Read stdin incrementally\n\
   -empty           Don't feed in a card at start-up\n\
   -noread          Don't display the read station\n\
-  -help            Display this text\n");
+  -help            Display this text\n\
+  -v               Display version number and exit\n");
     exit(1);
 }
 
@@ -500,6 +525,10 @@ main(int argc, char *argv[])
 	XtNumber(resources), 0, 0);
     if (appres.help)
 	usage();
+    if (appres.version) {
+	fprintf(stderr, "%s\n", VERSION);
+	exit(0);
+    }
 
     /* Set up some globals. */
     display = XtDisplay(toplevel);

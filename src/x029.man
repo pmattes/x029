@@ -1,5 +1,5 @@
 '\" t
-.TH x029 1 "15 September 2013"
+.TH x029 1 "24 January 2025"
 .SH "NAME"
 x029 \-
 \s-1IBM\s+1 keypunch emulator
@@ -149,6 +149,9 @@ Alias for \fB-charset ebcdic\fP.
 .TP
 \fB-help\fP
 Display command-line syntax help.
+.TP
+\fB-v\fP
+Display version number and exit.
 .SH BUGS
 The author has very little experience with real keypunches, and
 would appreciate any input on how to make \fBx029\fP a more realistic
