@@ -2202,7 +2202,9 @@ demo_fsm(void)
 		ds = DS_SPACE;
 		break;
 	    }
-	    add_char(c);
+	    if (col < (appres.autonumber? (N_COLS - 8): N_COLS)) {
+		add_char(c);
+	    }
 	    if (s >= buf + rbsize) {
 		/*
 		 * Ran out of buffer without a newline.
@@ -2210,15 +2212,6 @@ demo_fsm(void)
 		 * Go read some more.
 		 */
 		ds = DS_READ;
-		continue;
-	    }
-	    if (col >= (appres.autonumber? (N_COLS - 1 - 8):
-					   (N_COLS - 1))) {
-		/*
-		 * Overflowed the card.
-		 *
-		 * Eat the character.
-		 */
 		continue;
 	    }
 	    break;
