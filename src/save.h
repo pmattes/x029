@@ -30,8 +30,7 @@
 #if !defined(SAVE_H) /*[*/
 # define SAVE_H 1
 
-extern void save_popup(void);
-extern void Confirm_action(Widget w, XEvent *event, String *params,
-	Cardinal *num_params);
+void save_popup(void);
+void Confirm_action(Widget w, XEvent *event, String *params, Cardinal *num_params);
 
 #endif /*]*/

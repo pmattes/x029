@@ -504,10 +504,11 @@ main(int argc, char *argv[])
 
     /* Figure out who we are */
     programname = strrchr(argv[0], '/');
-    if (programname)
+    if (programname) {
 	++programname;
-    else
+    } else {
 	programname = argv[0];
+    }
 
     /* Initialze Xt and fetch our resources. */
     toplevel = XtVaAppInitialize(
@@ -519,12 +520,14 @@ main(int argc, char *argv[])
 	XtNinput, True,
 	XtNallowShellResize, False,
 	NULL);
-    if (argc > 1)
+    if (argc > 1) {
 	usage();
+    }
     XtGetApplicationResources(toplevel, &appres, resources,
 	XtNumber(resources), 0, 0);
-    if (appres.help)
+    if (appres.help) {
 	usage();
+    }
     if (appres.version) {
 	fprintf(stderr, "%s\n", VERSION);
 	exit(0);
@@ -542,8 +545,9 @@ main(int argc, char *argv[])
 
     /* Load fonts. */
     ifontinfo = XLoadQueryFont(display, appres.ifontname);
-    if (ifontinfo == NULL)
+    if (ifontinfo == NULL) {
 	XtError("Can't load interpreter font");
+    }
 
     /* Pick out the character set. */
     if (appres.charset != NULL) {
@@ -572,7 +576,7 @@ main(int argc, char *argv[])
 	    }
 	} else {
 	    demofd = fileno(stdin);
-    }
+	}
 	mode = M_BATCH;
     } else if (appres.remotectl) {
 	mode = M_REMOTECTL;
@@ -591,8 +595,7 @@ main(int argc, char *argv[])
 
     /* Allow us to die gracefully. */
     XSetWMProtocols(display, XtWindow(toplevel), &a_delete_me, 1);
-    table = XtParseTranslationTable(
-	"<Message>WM_PROTOCOLS: DeleteWindow()");
+    table = XtParseTranslationTable("<Message>WM_PROTOCOLS: DeleteWindow()");
     XtOverrideTranslations(toplevel, table);
 
 #if defined(SOUND) /*[*/
@@ -695,8 +698,9 @@ toggle_callback(Widget w, XtPointer client_data, XtPointer call_data)
     }
 
     /* It's the CLEAR switch. */
-    if (t->on)
+    if (t->on) {
 	return;
+    }
     t->on = !t->on;
 
     clear_switch();
@@ -1011,8 +1015,9 @@ define_widgets(void)
 	    XtError("XpmCreatePixmapFromData failed");
     }
     for (i = 0; i < 8; i++) {
-	if (i == 1 || i == 6)
+	if (i == 1 || i == 6) {
 	    continue;
+	}
 	toggles[i].on = (i < 7);
 	toggles[i].w = XtVaCreateManagedWidget(
 	    "switchcmd", commandWidgetClass, keybox,
@@ -1200,15 +1205,17 @@ punch_char(int cn, unsigned char c)
 
     if (charset_xlate(ccharset, c) == NS) {
 	/* Map lowercase, to be polite. */
-	if (islower(c) && charset_xlate(ccharset, toupper(c)) != NS)
+	if (islower(c) && charset_xlate(ccharset, toupper(c)) != NS) {
 	    c = toupper(c);
-	else
+	} else {
 	    return False;
+	}
     }
 
     /* Space?  Do nothing. */
-    if (!charset_xlate(ccharset, c))
+    if (!charset_xlate(ccharset, c)) {
 	return True;
+    }
 
     ps_card->holes[cn] |= charset_xlate(ccharset, c);
 
@@ -1243,8 +1250,9 @@ draw_col(card_t *card, int window, int cn)
 
     /* Draw the text at the top, possibly overstruck. */
     for (j = 0; j < card->n_ov[cn]; j++) {
-	if (card->coltxt[cn][j] < ' ')
+	if (card->coltxt[cn][j] < ' ') {
 	    continue;
+	}
 	XDrawString(display, window, gc, x, TOP_PAD + TEXT_PAD,
 		(char *)&card->coltxt[cn][j], 1);
     }
@@ -1271,8 +1279,9 @@ set_posw(int c)
 {
     col = c;
 
-    if (col < N_COLS)
+    if (col < N_COLS) {
 	XtVaSetValues(posw, XtNx, -(col * 14), NULL);
+    }
 }
 
 /* Go to the next card. */
@@ -1475,8 +1484,6 @@ queued_DATA(int c)
 	    loud_click();
 #endif /*]*/
 	    queued_KYBD_RIGHT(0);
-	} else {
-	    XBell(display, 0);
 	}
     }
 }
@@ -1593,8 +1600,9 @@ queued_PAN_RIGHT_BOTH(int do_click)
     }
 
 #if defined(SOUND) /*[*/
-    if (do_click)
+    if (do_click) {
 	soft_click();
+    }
 #endif /*]*/
 }
 
@@ -1608,8 +1616,9 @@ queued_PAN_RIGHT_PRINT(int do_click)
     XtVaSetValues(ps_cardw, XtNx, x, NULL);
 
 #if defined(SOUND) /*[*/
-    if (do_click)
+    if (do_click) {
 	soft_click();
+    }
 #endif /*]*/
 }
 
@@ -1623,8 +1632,9 @@ queued_PAN_RIGHT_READ(int do_click)
     XtVaSetValues(rs_cardw, XtNx, x, NULL);
 
 #if defined(SOUND) /*[*/
-    if (do_click)
+    if (do_click) {
 	soft_click();
+    }
 #endif /*]*/
 }
 
@@ -2265,7 +2275,6 @@ demo_fsm(void)
 	    break;
 	}
     } while (eq_count == 0 && power_on);
-
 }
 
 /*

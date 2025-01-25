@@ -39,7 +39,7 @@
 #define SOFT	"click2.au"
 #define DEV	"/dev/audio"
 
-extern char *malloc();
+extern char *malloc(void);
 
 static int dfd = -1;
 
@@ -50,99 +50,100 @@ struct aa {
 } loud, soft;
 
 void
-audio_init()
+audio_init(void)
 {
-	if (audiodev_init() < 0)
-		return;
-	if (audiofile_init(LOUD, &loud)) {
-		close(dfd);
-		dfd = -1;
-		return;
-	}
-	if (audiofile_init(SOFT, &soft)) {
-		close(dfd);
-		dfd = -1;
-		return;
-	}
+    if (audiodev_init() < 0) {
+	return;
+    }
+    if (audiofile_init(LOUD, &loud)) {
+	close(dfd);
+	dfd = -1;
+	return;
+    }
+    if (audiofile_init(SOFT, &soft)) {
+	close(dfd);
+	dfd = -1;
+	return;
+    }
 }
 
 int
-audiodev_init()
+audiodev_init(void)
 {
-	if ((dfd = open(DEV, O_WRONLY)) < 0) {
-		perror(DEV);
-		return -1;
-	}
-	return 0;
+    if ((dfd = open(DEV, O_WRONLY)) < 0) {
+	perror(DEV);
+	return -1;
+    }
+    return 0;
 }
 
 int
-audiofile_init(fn, aa)
-char *fn;
-struct aa *aa;
+audiofile_init(char *fn, struct aa *aa)
 {
-	int afd;
-	int nr;
+    int afd;
+    int nr;
 
-	if (audio_isaudiofile(fn) != TRUE) {
-		fprintf(stderr, "%s is not an audio file\n", fn);
-		return -1;
-	}
-	if ((afd = open(fn, O_RDONLY)) < 0) {
-		perror(fn);
-		return -1;
-	}
-	if (audio_read_filehdr(afd, &aa->hp, 0, 0) != AUDIO_SUCCESS) {
-		fprintf(stderr, "Can't read header from %s\n", fn);
-		close(afd);
-		return -1;
-	}
-	if (aa->hp.data_size == AUDIO_UNKNOWN_SIZE) {
-		struct stat s;
-
-		(void) fstat(afd, &s);
-		aa->asize = s.st_size;
-	} else
-		aa->asize = aa->hp.data_size;
-	if (audio_set_play_config(dfd, &aa->hp) != AUDIO_SUCCESS) {
-		fprintf(stderr, "Can't set play configuration\n");
-		close(afd);
-		return -1;
-	}
-	if (!(aa->sound = malloc(aa->asize))) {
-		fprintf(stderr, "Can't allocate sound memory\n");
-		close(afd);
-		return -1;
-	}
-	if ((nr = read(afd, aa->sound, aa->asize)) < 0) {
-		perror("sound read");
-		close(afd);
-		return -1;
-	}
-	if (nr < aa->asize)
-		aa->asize = nr;
+    if (audio_isaudiofile(fn) != TRUE) {
+	fprintf(stderr, "%s is not an audio file\n", fn);
+	return -1;
+    }
+    if ((afd = open(fn, O_RDONLY)) < 0) {
+	perror(fn);
+	return -1;
+    }
+    if (audio_read_filehdr(afd, &aa->hp, 0, 0) != AUDIO_SUCCESS) {
+	fprintf(stderr, "Can't read header from %s\n", fn);
 	close(afd);
-	return 0;
+	return -1;
+    }
+    if (aa->hp.data_size == AUDIO_UNKNOWN_SIZE) {
+	struct stat s;
+
+	(void) fstat(afd, &s);
+	aa->asize = s.st_size;
+    } else {
+	aa->asize = aa->hp.data_size;
+    }
+    if (audio_set_play_config(dfd, &aa->hp) != AUDIO_SUCCESS) {
+	fprintf(stderr, "Can't set play configuration\n");
+	close(afd);
+	return -1;
+    }
+    if (!(aa->sound = malloc(aa->asize))) {
+	fprintf(stderr, "Can't allocate sound memory\n");
+	close(afd);
+	return -1;
+    }
+    if ((nr = read(afd, aa->sound, aa->asize)) < 0) {
+	perror("sound read");
+	close(afd);
+	return -1;
+    }
+    if (nr < aa->asize) {
+	aa->asize = nr;
+    }
+    close(afd);
+    return 0;
 }
 
 void
-loud_click()
+loud_click(void)
 {
-	if (dfd < 0) {
-		fprintf(stderr, "click: audio file not initialized\n");
-		return;
-	}
-	audio_drain(dfd, FALSE);
-	(void) write(dfd, loud.sound, loud.asize);
+    if (dfd < 0) {
+	fprintf(stderr, "click: audio file not initialized\n");
+	return;
+    }
+    audio_drain(dfd, FALSE);
+    (void) write(dfd, loud.sound, loud.asize);
 }
 
 void
-soft_click()
+soft_click(void)
 {
-	if (dfd < 0) {
-		fprintf(stderr, "click: audio file not initialized\n");
-		return;
-	}
-	audio_drain(dfd, FALSE);
-	(void) write(dfd, soft.sound, soft.asize);
+    if (dfd < 0) {
+	fprintf(stderr, "click: audio file not initialized\n");
+	return;
+    }
+    audio_drain(dfd, FALSE);
+    (void) write(dfd, soft.sound, soft.asize);
 }

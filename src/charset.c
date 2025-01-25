@@ -466,21 +466,25 @@ dump_charset(charset_t cs)
 
 	    printf(", /* ");
 	    for (j = i - 8; j < i; j++) {
-		if ((j & 0x7f) > ' ' && j != 0x7f)
+		if ((j & 0x7f) > ' ' && j != 0x7f) {
 		    putchar(j);
-		else
+		} else {
 		    putchar(' ');
+		}
 	    }
 	    printf(" */\n");
 	}
-	if (i == 257)
+	if (i == 257) {
 	    break;
-	if (i % 8)
+	}
+	if (i % 8) {
 	    printf(", ");
-	if (c->charset[i] == NS)
+	}
+	if (c->charset[i] == NS) {
 	    printf("   NS");
-	else
+	} else {
 	    printf("0%04o", c->charset[i]);
+	}
     }
 }
 #endif

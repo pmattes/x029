@@ -55,26 +55,26 @@
 typedef struct _fake_charset *charset_t;
 
 /* Accessors. */
-extern const char *charset_name(charset_t cs);
-extern const char *charset_desc(charset_t cs);
-extern punch_type_t charset_punch_type(charset_t cs);
-extern unsigned charset_xlate(charset_t cs, unsigned char ix);
+const char *charset_name(charset_t cs);
+const char *charset_desc(charset_t cs);
+punch_type_t charset_punch_type(charset_t cs);
+unsigned charset_xlate(charset_t cs, unsigned char ix);
 
 /*
  * Match a character set by name.
  * Returns NULL for failure.
  */
-extern charset_t find_charset(const char *name);
+charset_t find_charset(const char *name);
 
 /*
  * Return the default character set.
  */
-extern charset_t default_charset(void);
+charset_t default_charset(void);
 
 /*
  * Return the first/next character set.
  * Use NULL to start.
  */
-extern charset_t next_charset(charset_t curr);
+charset_t next_charset(charset_t curr);
 
 #endif /*]*/

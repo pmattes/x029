@@ -53,23 +53,23 @@ extern int default_screen;
 extern Atom a_delete_me;
 extern XtAppContext appcontext;
 
-extern Boolean add_char(char c);
-extern card_t *first_card(void);
-extern card_t *next_card(card_t *c);
-extern void clear_stacker(void);
-extern void set_next_card_image(cardimg_t c);
-extern int set_charset(charset_t c);
+Boolean add_char(char c);
+card_t *first_card(void);
+card_t *next_card(card_t *c);
+void clear_stacker(void);
+void set_next_card_image(cardimg_t c);
+int set_charset(charset_t c);
 
-extern Pixel get_errcolor(void);
-extern Pixel get_cabinet(void);
-extern Pixel get_foreground(void);
-extern charset_t get_charset(void);
-extern Boolean debugging(void);
-extern void demo_fsm(void);
+Pixel get_errcolor(void);
+Pixel get_cabinet(void);
+Pixel get_foreground(void);
+charset_t get_charset(void);
+Boolean debugging(void);
+void demo_fsm(void);
 
-extern void dbg_printf(const char *fmt, ...);
-extern void dbg_cprintf(const char *fmt, ...);
-extern void action_dbg(const char *name, Widget wid, XEvent *event,
+void dbg_printf(const char *fmt, ...);
+void dbg_cprintf(const char *fmt, ...);
+void action_dbg(const char *name, Widget wid, XEvent *event,
 	String *params, Cardinal *num_params);
 
 #endif /*]*/

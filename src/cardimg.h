@@ -34,27 +34,27 @@
 typedef struct _fake_cardimg *cardimg_t;
 
 /* Accessors. */
-extern const char *cardimg_name(cardimg_t cd);
-extern const char *cardimg_desc(cardimg_t cd);
-extern char **cardimg_pixmap_source(cardimg_t cd);
-extern char **cardimg_pixmap_menu_source(cardimg_t cd);
-extern unsigned char *cardimg_type(cardimg_t cd);
+const char *cardimg_name(cardimg_t cd);
+const char *cardimg_desc(cardimg_t cd);
+char **cardimg_pixmap_source(cardimg_t cd);
+char **cardimg_pixmap_menu_source(cardimg_t cd);
+unsigned char *cardimg_type(cardimg_t cd);
 
 /*
  * Match a card image by name.
  * Returns NULL for failure.
  */
-extern cardimg_t find_cardimg(const char *name);
+cardimg_t find_cardimg(const char *name);
 
 /*
  * Return the default card image.
  */
-extern cardimg_t default_cardimg(void);
+cardimg_t default_cardimg(void);
 
 /*
  * Return the first/next card image.
  * Use NULL to start.
  */
-extern cardimg_t next_cardimg(cardimg_t curr);
+cardimg_t next_cardimg(cardimg_t curr);
 
 #endif /*]*/

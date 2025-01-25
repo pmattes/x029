@@ -30,6 +30,6 @@
 #if !defined(PASTE_H) /*[*/
 # define PASTE_H 1
 
-extern void InsertSelection_action(Widget, XEvent *, String *, Cardinal *);
+void InsertSelection_action(Widget, XEvent *, String *, Cardinal *);
 
 #endif /*]*/

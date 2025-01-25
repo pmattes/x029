@@ -46,28 +46,28 @@
 #include "cardmenu_pink.xpm"
 
 static const struct card_image {
-	const char *name;
-	const char *description;
-	char **pixmap_source;
-	char **pixmap_menu_source;
-	unsigned char card_type[3];
+    const char *name;
+    const char *description;
+    char **pixmap_source;
+    char **pixmap_menu_source;
+    unsigned char card_type[3];
 } cards[] = {
-	{ "collins", "Collins Radio Corporation",
-	    card_collins_xpm, cardmenu_collins_xpm,
-	    { PC_COLOR_CREAM | PC_CORNER_ROUND | PC_CUT_LEFT, 0, 0 } },
-	{ "cmu", "Carnegie Mellon University",
-	    card_cmu_xpm, cardmenu_cmu_xpm,
-	    { PC_COLOR_YELLOW_STRIPE | PC_CORNER_ROUND | PC_CUT_RIGHT, 0, 0 } },
-	{ "ibm", "IBM cream",
-	    card_ibm_xpm, cardmenu_ibm_xpm,
-	    { PC_COLOR_CREAM | PC_CORNER_ROUND | PC_CUT_LEFT, 0, 0 } },
-	{ "harvard", "Harvard University",
-	    card_harvard_xpm, cardmenu_harvard_xpm,
-	    { PC_COLOR_CREAM | PC_CORNER_ROUND | PC_CUT_RIGHT, 0, 0 } },
-	{ "pink", "Plain pink",
-	    card_pink_xpm, cardmenu_pink_xpm,
-	    { PC_COLOR_PINK | PC_CORNER_ROUND, 0, 0 } },
-	{ NULL, NULL }
+    { "collins", "Collins Radio Corporation",
+	card_collins_xpm, cardmenu_collins_xpm,
+	{ PC_COLOR_CREAM | PC_CORNER_ROUND | PC_CUT_LEFT, 0, 0 } },
+    { "cmu", "Carnegie Mellon University",
+	card_cmu_xpm, cardmenu_cmu_xpm,
+	{ PC_COLOR_YELLOW_STRIPE | PC_CORNER_ROUND | PC_CUT_RIGHT, 0, 0 } },
+    { "ibm", "IBM cream",
+	card_ibm_xpm, cardmenu_ibm_xpm,
+	{ PC_COLOR_CREAM | PC_CORNER_ROUND | PC_CUT_LEFT, 0, 0 } },
+    { "harvard", "Harvard University",
+	card_harvard_xpm, cardmenu_harvard_xpm,
+	{ PC_COLOR_CREAM | PC_CORNER_ROUND | PC_CUT_RIGHT, 0, 0 } },
+    { "pink", "Plain pink",
+	card_pink_xpm, cardmenu_pink_xpm,
+	{ PC_COLOR_PINK | PC_CORNER_ROUND, 0, 0 } },
+    { NULL, NULL }
 };
 
 #define FROM_CD(cd)	(struct card_image *)(void *)(cd)

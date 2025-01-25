@@ -65,8 +65,9 @@ paste_callback(Widget w, XtPointer client_data, Atom *selection, Atom *type,
     while (len--) {
 	unsigned char c = *s++;
 
-	if (c == '\n')
+	if (c == '\n') {
 	    break;
+	}
 	if (c < ' ') {
 	    continue;
 	}

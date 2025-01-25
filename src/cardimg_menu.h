@@ -30,12 +30,10 @@
 #if !defined(CARDIMG_MENU_H) /*[*/
 # define CARDIMG_MENU_H 1
 
-extern void cardimg_menu_init(cardimg_t current_cardimg, Widget container,
+void cardimg_menu_init(cardimg_t current_cardimg, Widget container,
 	Dimension x, Dimension y);
 
-extern void Hover_action(Widget w, XEvent *event, String *params,
-	Cardinal *num_params);
-extern void UnHover_action(Widget w, XEvent *event, String *params,
-	Cardinal *num_params);
+void Hover_action(Widget w, XEvent *event, String *params, Cardinal *num_params);
+void UnHover_action(Widget w, XEvent *event, String *params, Cardinal *num_params);
 
 #endif /*]*/
