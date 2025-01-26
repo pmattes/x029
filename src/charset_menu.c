@@ -27,6 +27,8 @@
  * x029 character set menu.
  */
 
+#include <stdbool.h>
+
 #include <X11/Intrinsic.h>
 #include <X11/StringDefs.h>
 #include <X11/Xaw/Command.h>

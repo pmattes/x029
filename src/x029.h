@@ -53,7 +53,8 @@ extern int default_screen;
 extern Atom a_delete_me;
 extern XtAppContext appcontext;
 
-Boolean add_char(char c);
+void add_paste_char(unsigned char c);
+void poke_fsm(void);
 card_t *first_card(void);
 card_t *next_card(card_t *c);
 void clear_stacker(void);
@@ -64,8 +65,8 @@ Pixel get_errcolor(void);
 Pixel get_cabinet(void);
 Pixel get_foreground(void);
 charset_t get_charset(void);
-Boolean debugging(void);
-void demo_fsm(void);
+bool debugging(void);
+void run_fsms(void);
 
 void dbg_printf(const char *fmt, ...);
 void dbg_cprintf(const char *fmt, ...);

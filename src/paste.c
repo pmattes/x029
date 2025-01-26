@@ -27,6 +27,8 @@
  * x029 paste operations.
  */
 
+#include <stdbool.h>
+
 #include <X11/Intrinsic.h>
 #include <X11/Xatom.h>
 
@@ -63,19 +65,10 @@ paste_callback(Widget w, XtPointer client_data, Atom *selection, Atom *type,
     s = (char *)value;
     len = *length;
     while (len--) {
-	unsigned char c = *s++;
-
-	if (c == '\n') {
-	    break;
-	}
-	if (c < ' ') {
-	    continue;
-	}
-	if (!add_char(c)) {
-	    break;
-	}
+	add_paste_char(*s++);
     }
     n_pasting = 0;
+    poke_fsm();
 
     XtFree(value);
 }

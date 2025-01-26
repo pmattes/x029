@@ -1,5 +1,5 @@
 '\" t
-.TH x029 1 "24 January 2025"
+.TH x029 1 "26 January 2025"
 .SH "NAME"
 x029 \-
 \s-1IBM\s+1 keypunch emulator
@@ -38,6 +38,9 @@ The blue \fBDROP\fP key will discard the card in the punch station, and if
 Auto-Feed is on, replace it with a blank card.
 (There is no such key on a real 029.)
 .LP
+The middle mouse button and the Ctrl-V key will cause text to be pasted from
+the \fBPRIMARY\fP and \fBCLIPBOARD\fP selections respectively.
+.LP
 There is a row of toggle switches at the bottom of the window. Some are (for
 now) just for show, but several of them have real functions:
 .TP
@@ -66,8 +69,7 @@ details).
 .LP
 The character set and card image can be changed on the fly via buttons under
 the punch station.
-Note that the character set cannot be changed when the card in the punch
-station has one or more punches in it, and that changing the card image changes
+Note that changing the card image changes
 the type of the next card fed from the hopper, not the card currently in the
 punch station.
 .SH "BATCH AND REMOTE CONTROL MODES"

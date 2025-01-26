@@ -58,7 +58,7 @@ enum evtype {
     NUM_EVENTS
 };
 
-typedef void eq_fn_t(int);
+typedef void eq_fn_t(unsigned char);
 
 extern eq_fn_t queued_DUMMY;
 extern eq_fn_t queued_DATA;
@@ -86,7 +86,7 @@ extern eq_fn_t queued_OFF;
 extern eq_fn_t queued_CLEAR_SEQ;
 
 /* Add an event to the back of the queue. */
-void enq_event(enum evtype evtype, unsigned char param, Boolean interactive, int delay);
+void enq_event(enum evtype evtype, unsigned char param, bool interactive, int delay);
 
 /* Flush typeahead events from the queue. */
 void flush_typeahead(void);

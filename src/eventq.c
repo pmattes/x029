@@ -29,7 +29,9 @@
 
 #include <stdio.h>
 #include <assert.h>
+#include <stdbool.h>
 #include <sys/time.h>
+
 #include <X11/Intrinsic.h>
 
 #include "jones.h"		/* file format definitions */
@@ -42,7 +44,7 @@ typedef struct event {
     struct event *next;
     enum evtype evtype;
     unsigned char param;
-    Boolean interactive;
+    bool interactive;
     int delay;
     int count;
 } event_t;
@@ -50,10 +52,10 @@ typedef struct event {
 int eq_count;
 
 static struct timeval tv_set;
-static Boolean to_set = False;
+static bool to_set = False;
 static XtIntervalId set_id = 0;
 
-static void (*eq_fn[NUM_EVENTS])(int) = {
+static void (*eq_fn[NUM_EVENTS])(unsigned char) = {
     queued_DUMMY,
     queued_DATA,
     queued_MULTIPUNCH,
@@ -113,24 +115,51 @@ static void
 dump_queue(const char *when)
 {
     event_t *e = NULL;
+    event_t *same = NULL;
+    int same_count = 0;
+#   define dump_same() { \
+        dbg_cprintf(" "); \
+	if (same_count > 1) { \
+	    dbg_cprintf("("); \
+	} \
+	dbg_cprintf("%s(%d)%s", eq_name[same->evtype], same->delay, same->interactive? "*": ""); \
+	if (same->count > 1) { \
+	    dbg_cprintf("x%d", same->count); \
+	} \
+	if (same_count > 1) { \
+	    dbg_cprintf(")x%d", same_count); \
+	} \
+	same = NULL; \
+    }
 
     if (!debugging()) {
 	return;
     }
 
-    printf("queue(%s):", when);
+    dbg_printf("[eventq] queue(%s):", when);
     if (eq_first == NULL) {
-	printf(" (empty)\n");
+	dbg_cprintf(" (empty)\n");
 	return;
     }
 
     for (e = eq_first; e != NULL; e = e->next) {
-	printf(" %s(%d)%s", eq_name[e->evtype], e->delay,
-		e->interactive? "*": "");
-	if (e->count > 1)
-	    printf("x%d", e->count);
+	if (same != NULL) {
+	    if (e->evtype == same->evtype && e->delay == same->delay && e->interactive == same->interactive) {
+		/* same as the last displayed */
+		same_count++;
+		continue;
+	    } else {
+		/* not the same as the last displayed */
+		dump_same();
+	    }
+	}
+	same = e;
+	same_count = 1;
     }
-    printf("\n");
+    if (same != NULL) {
+	dump_same();
+    }
+    dbg_cprintf("\n");
 }
 
 /* Run the event at the front of the queue. */
@@ -140,13 +169,13 @@ deq_event(XtPointer data, XtIntervalId *id)
     event_t *e;
     struct timeval tv;
     long waited;
-    Boolean complete = False;
+    bool complete = false;
 
     assert(data == (XtPointer)eq_first);
     assert(eq_count);
     assert(to_set);
 
-    to_set = False;
+    to_set = false;
     set_id = 0;
 
     gettimeofday(&tv, NULL);
@@ -162,12 +191,12 @@ deq_event(XtPointer data, XtIntervalId *id)
 	eq_first = e->next;
 	if (eq_first == NULL)
 	    eq_last = NULL;
-	complete = True;
+	complete = true;
 	--eq_count;
     }
 
     /* Run it. */
-    dbg_printf("run %s(%d)\n", eq_name[e->evtype], e->delay);
+    dbg_printf("[eventq] run %s(%d)%s\n", eq_name[e->evtype], e->delay, e->interactive? "*": "");
     (*eq_fn[e->evtype])(e->param);
 
     /* Free it. */
@@ -181,20 +210,19 @@ deq_event(XtPointer data, XtIntervalId *id)
      * Otherwise, see if the demo FSM needs cranking.
      */
     if (eq_count && !to_set) {
-	dbg_printf("adding timeout(%d)\n", eq_first->delay);
+	dbg_printf("[eventq] adding timeout(%d)\n", eq_first->delay);
 	gettimeofday(&tv_set, NULL);
 	set_id = XtAppAddTimeOut(appcontext, eq_first->delay, deq_event,
 		(XtPointer)eq_first);
-	to_set = True;
+	to_set = true;
     } else {
-	demo_fsm();
+	run_fsms();
     }
 }
 
 /* Add an event to the back of the queue. */
 void
-enq_event(enum evtype evtype, unsigned char param, Boolean interactive,
-	int delay)
+enq_event(enum evtype evtype, unsigned char param, bool interactive, int delay)
 {
     event_t *e;
 
@@ -224,11 +252,11 @@ enq_event(enum evtype evtype, unsigned char param, Boolean interactive,
     dump_queue("after enq");
 
     if (!eq_count++) {
-	assert(to_set == False);
-	dbg_printf("adding timeout(%d)\n", delay);
+	assert(to_set == false);
+	dbg_printf("[eventq] adding timeout(%d)\n", delay);
 	gettimeofday(&tv_set, NULL);
 	set_id = XtAppAddTimeOut(appcontext, delay, deq_event, (XtPointer)e);
-	to_set = True;
+	to_set = true;
     }
 }
 
@@ -239,15 +267,21 @@ flush_typeahead(void)
     event_t *e;
     event_t *prev = NULL;
     event_t *next;
+    bool any = false;
 
     for (e = eq_first; e != NULL; e = next) {
 	next = e->next;
 	if (e->interactive) {
-	    dbg_printf("Flush %s(%d)*\n", eq_name[e->evtype], e->delay);
+	    if (!any) {
+		dbg_printf("[eventq] Flush %s(%d)*", eq_name[e->evtype], e->delay);
+		any = true;
+	    } else {
+		dbg_cprintf(" %s(%d)*", eq_name[e->evtype], e->delay);
+	    }
 	    if (e == eq_first && to_set) {
 		XtRemoveTimeOut(set_id);
 		set_id = 0;
-		to_set = False;
+		to_set = false;
 	    }
 	    if (prev != NULL) {
 		prev->next = e->next;
@@ -263,6 +297,9 @@ flush_typeahead(void)
 	}
 	prev = e;
     }
+    if (any) {
+	dbg_cprintf("\n");
+    }
     dump_queue("after flush");
 
     /*
@@ -273,10 +310,10 @@ flush_typeahead(void)
      * time elapsed since the previous timeout was scheduled. It could.
      */
     if (eq_count && !to_set) {
-	dbg_printf("adding timeout(%d)\n", eq_first->delay);
+	dbg_printf("[eventq] adding timeout(%d)\n", eq_first->delay);
 	gettimeofday(&tv_set, NULL);
 	set_id = XtAppAddTimeOut(appcontext, eq_first->delay, deq_event,
 		(XtPointer)eq_first);
-	to_set = True;
+	to_set = true;
     }
 }

@@ -36,6 +36,7 @@
 #include <fcntl.h>
 #include <stdarg.h>
 #include <assert.h>
+#include <stdbool.h>
 #include <sys/time.h>
 #include <inttypes.h>
 #include <X11/Intrinsic.h>
@@ -247,9 +248,10 @@ static cardimg_t	ncardimg = NULL;
 
 static Position		ps_offset;
 
-int			demofd = -1;
+int			ap_fd = -1;
+bool			did_auto_rel = false;
 
-/* Mode: interactive versus demo. */
+/* Mode: interactive versus auto-play. */
 typedef enum {
     M_INTERACTIVE,		/* interactive */
     M_BATCH,			/* read from a fixed file */
@@ -420,7 +422,7 @@ static XtActionsRec actions[] = {
 };
 static int actioncount = XtNumber(actions);
 
-static Boolean power_on = False;
+static bool power_on = false;
 typedef enum {
     C_EMPTY,		/* No card in punch station, no operation pending */
     C_FLUX,		/* Operation in progress (in or out) */
@@ -451,12 +453,13 @@ static void feed_key_backend(kpkey_t *);
 static void define_widgets(void);
 static void startup_power_feed(void);
 static void startup_power(void);
-static void do_feed(Boolean keep_sequence);
+static void do_feed(bool keep_sequence);
 static void enq_delay(void);
 static void do_release(int delay);
 static void do_clear_read(void);
 static void show_key_down(kpkey_t *key);
 static void display_card_count(void);
+static void init_fsms();
 
 /* Syntax. */
 void
@@ -491,6 +494,7 @@ usage(void)
   -remotectl       Read stdin incrementally\n\
   -empty           Don't feed in a card at start-up\n\
   -noread          Don't display the read station\n\
+  -debug           Write debug into to stdout\n\
   -help            Display this text\n\
   -v               Display version number and exit\n");
     exit(1);
@@ -569,18 +573,18 @@ main(int argc, char *argv[])
 			    "ignoring remotectl\n");
 	}
 	if (strcmp(appres.demofile, "-")) {
-	    demofd = open(appres.demofile, O_RDONLY | O_NONBLOCK);
-	    if (demofd < 0) {
+	    ap_fd = open(appres.demofile, O_RDONLY | O_NONBLOCK);
+	    if (ap_fd < 0) {
 		perror(appres.demofile);
 		exit(1);
 	    }
 	} else {
-	    demofd = fileno(stdin);
+	    ap_fd = fileno(stdin);
 	}
 	mode = M_BATCH;
     } else if (appres.remotectl) {
 	mode = M_REMOTECTL;
-	demofd = fileno(stdin);
+	ap_fd = fileno(stdin);
     } else {
 	mode = M_INTERACTIVE;
     }
@@ -603,8 +607,8 @@ main(int argc, char *argv[])
     audio_init();
 #endif /*]*/
 
-    if (mode != M_INTERACTIVE && demofd == fileno(stdin)) {
-	if (fcntl(demofd, F_SETFL, fcntl(demofd, F_GETFL) | O_NONBLOCK) < 0) {
+    if (mode != M_INTERACTIVE && ap_fd == fileno(stdin)) {
+	if (fcntl(ap_fd, F_SETFL, fcntl(ap_fd, F_GETFL) | O_NONBLOCK) < 0) {
 	    perror("fcntl");
 	    exit(1);
 	}
@@ -615,6 +619,9 @@ main(int argc, char *argv[])
     } else {
 	startup_power();
     }
+
+    /* Init the paste and auto-play FSMs. */
+    init_fsms();
 
     /* Process X events forever. */
     XtAppMainLoop(appcontext);
@@ -631,7 +638,7 @@ power_off_timeout(XtPointer data, XtIntervalId *id)
 static void
 do_power_off(void)
 {
-    power_on = False;
+    power_on = false;
     XtVaSetValues(power_widget, XtNbackgroundPixmap, flipper_off, NULL);
     (void) XtAppAddTimeOut(appcontext, VERY_SLOW * 2, power_off_timeout, NULL);
 }
@@ -640,11 +647,12 @@ do_power_off(void)
 static void
 power_callback(Widget w, XtPointer client_data, XtPointer call_data)
 {
+    dbg_printf("[callback] power\n");
     do_power_off();
 }
 
 void
-queued_OFF(int ignored)
+queued_OFF(unsigned char ignored)
 {
     do_power_off();
 }
@@ -671,6 +679,7 @@ unclear_event(XtPointer data, XtIntervalId *id)
 static void
 clear_switch(void)
 {
+    dbg_printf("[callback] clear\n");
     XtVaSetValues(toggles[T_CLEAR].w, XtNbackgroundPixmap, toggle_on, NULL);
     (void) XtAppAddTimeOut(appcontext, SLOW * 6, unclear_event, NULL);
 
@@ -796,6 +805,7 @@ define_widgets(void)
 	<Btn2Down>:	InsertSelection(PRIMARY)\n\
 	Alt<Key>:	MultiPunchData()\n\
 	Meta<Key>:	MultiPunchData()\n\
+	Ctrl<Key>v:	InsertSelection(CLIPBOARD)\n\
 	<Key>:		Data()\n";
 
     /* Create a container for the whole thing. */
@@ -1099,8 +1109,6 @@ define_widgets(void)
 	    KEYBOARD_TFRAME,  /* y */
 	    feed_xpm, feed_pressed_xpm,
 	    feed_key_backend);
-    XtVaSetValues(feed_key.widget, XtNsensitive, mode == M_INTERACTIVE,
-	    NULL);
 
     /* Add the REL key to the keyboard. */
     key_init(&rel_key, "REL", keyboard,
@@ -1108,8 +1116,6 @@ define_widgets(void)
 	    KEYBOARD_TFRAME,  /* y */
 	    rel_xpm, rel_pressed_xpm,
 	    rel_key_backend);
-    XtVaSetValues(rel_key.widget, XtNsensitive, mode == M_INTERACTIVE,
-	    NULL);
 
     /* Create the desk edge. */
     XtVaCreateManagedWidget(
@@ -1198,7 +1204,7 @@ define_widgets(void)
 }
 
 /* Punch a character into a particular column of the card the punch station. */
-static Boolean
+static bool
 punch_char(int cn, unsigned char c)
 {
     int j;
@@ -1208,13 +1214,13 @@ punch_char(int cn, unsigned char c)
 	if (islower(c) && charset_xlate(ccharset, toupper(c)) != NS) {
 	    c = toupper(c);
 	} else {
-	    return False;
+	    return false;
 	}
     }
 
     /* Space?  Do nothing. */
     if (!charset_xlate(ccharset, c)) {
-	return True;
+	return true;
     }
 
     ps_card->holes[cn] |= charset_xlate(ccharset, c);
@@ -1222,7 +1228,7 @@ punch_char(int cn, unsigned char c)
     /* Redundant? */
     for (j = 0; j < ps_card->n_ov[cn]; j++) {
 	if (ps_card->coltxt[cn][j] == c) {
-	    return True;
+	    return true;
 	}
     }
 
@@ -1233,7 +1239,7 @@ punch_char(int cn, unsigned char c)
 	}
     }
 
-    return True;
+    return true;
 }
 
 /* Render the image of a card column onto the X display. */
@@ -1286,7 +1292,7 @@ set_posw(int c)
 
 /* Go to the next card. */
 void
-queued_NEWCARD(int replace)
+queued_NEWCARD(unsigned char replace)
 {
     int i;
 
@@ -1307,7 +1313,7 @@ queued_NEWCARD(int replace)
 	line_number += 10;
     } else if (mode != M_INTERACTIVE) {
 
-	/* In demo mode, increment the sequence number. */
+	/* In auto-play mode, increment the sequence number. */
 	ps_card->seq = line_number;
 	line_number += 10;
     }
@@ -1470,12 +1476,12 @@ clear_stacker(void)
  */
 
 void
-queued_DUMMY(int ignored)
+queued_DUMMY(unsigned char ignored)
 {
 }
 
 void
-queued_DATA(int c)
+queued_DATA(unsigned char c)
 {
     if (CARD_REGISTERED && col < N_COLS) {
 	if (punch_char(col, c)) {
@@ -1489,7 +1495,7 @@ queued_DATA(int c)
 }
 
 void
-queued_MULTIPUNCH(int c)
+queued_MULTIPUNCH(unsigned char c)
 {
     if (col < N_COLS && punch_char(col, c)) {
 	draw_col(ps_card, XtWindow(ps_cardw), col);
@@ -1500,7 +1506,7 @@ queued_MULTIPUNCH(int c)
 }
 
 void
-queued_KEY_LEFT(int c)
+queued_KEY_LEFT(unsigned char c)
 {
     if (col) {
 	queued_PAN_LEFT_BOTH(0);
@@ -1512,19 +1518,17 @@ queued_KEY_LEFT(int c)
 
 /* The queued keyboard cursor-right operation. */
 void
-queued_KYBD_RIGHT(int do_click)
+queued_KYBD_RIGHT(unsigned char do_click)
 {
     if (col < N_COLS) {
 	queued_PAN_RIGHT_BOTH(do_click);
 	set_posw(col + 1);
 
 	/* Do auto-feed. */
-	if (mode == M_INTERACTIVE &&
-	    toggles[T_AUTO_FEED].on &&
-	    col == N_COLS) {
-
+	if (toggles[T_AUTO_FEED].on && col == N_COLS) {
 	    do_release(VERY_FAST);
-	    do_feed(False);
+	    do_feed(false);
+	    did_auto_rel = true;
 	}
     } else {
 	flush_typeahead();
@@ -1533,7 +1537,7 @@ queued_KYBD_RIGHT(int do_click)
 
 /* One column's worth of queued scroll right from the REL key. */
 void
-queued_REL_RIGHT(int do_click)
+queued_REL_RIGHT(unsigned char do_click)
 {
     if (col < N_COLS) {
 	queued_PAN_RIGHT_BOTH(do_click);
@@ -1542,7 +1546,7 @@ queued_REL_RIGHT(int do_click)
 }
 
 void
-queued_PAN_LEFT_PRINT(int ignored)
+queued_PAN_LEFT_PRINT(unsigned char ignored)
 {
     Position x;
 
@@ -1556,7 +1560,7 @@ queued_PAN_LEFT_PRINT(int ignored)
 }
 
 void
-queued_PAN_LEFT_BOTH(int ignored)
+queued_PAN_LEFT_BOTH(unsigned char ignored)
 {
     Position x;
 
@@ -1585,7 +1589,7 @@ queued_PAN_LEFT_BOTH(int ignored)
  * the print station card and the read station card.
  */
 void
-queued_PAN_RIGHT_BOTH(int do_click)
+queued_PAN_RIGHT_BOTH(unsigned char do_click)
 {
     Position x;
 
@@ -1607,7 +1611,7 @@ queued_PAN_RIGHT_BOTH(int do_click)
 }
 
 void
-queued_PAN_RIGHT_PRINT(int do_click)
+queued_PAN_RIGHT_PRINT(unsigned char do_click)
 {
     Position x;
 
@@ -1623,7 +1627,7 @@ queued_PAN_RIGHT_PRINT(int do_click)
 }
 
 void
-queued_PAN_RIGHT_READ(int do_click)
+queued_PAN_RIGHT_READ(unsigned char do_click)
 {
     Position x;
 
@@ -1639,7 +1643,7 @@ queued_PAN_RIGHT_READ(int do_click)
 }
 
 void
-queued_PAN_UP(int ignored)
+queued_PAN_UP(unsigned char ignored)
 {
     Position y;
 
@@ -1649,14 +1653,14 @@ queued_PAN_UP(int ignored)
 }
 
 void
-queued_HOME(int ignored)
+queued_HOME(unsigned char ignored)
 {
     queued_PAN_LEFT_BOTH(0);
     set_posw(col - 1);
 }
 
 void
-queued_SLAM(int ignored)
+queued_SLAM(unsigned char ignored)
 {
     XtVaSetValues(ps_cardw,
 	XtNx, FEED_X,
@@ -1665,37 +1669,37 @@ queued_SLAM(int ignored)
 }
 
 void
-queued_FLUX(int ignored)
+queued_FLUX(unsigned char ignored)
 {
     punch_state = C_FLUX;
 }
 
 void
-queued_REGISTERED(int ignored)
+queued_REGISTERED(unsigned char ignored)
 {
     punch_state = C_REGISTERED;
     set_posw(0);
 }
 
-/*
- * Add a character to the card the punch station. This is an external entry
- * point used by the paste logic and the demo logic.
- */
-Boolean
+/* Add a character to the card the punch station. */
+static bool
 add_char(char c)
 {
     if (power_on && CARD_REGISTERED) {
-	enq_event(DATA, c, True, SLOW);
-	return True;
+	/* Make sure we will actually punch the character. */
+	if (charset_xlate(ccharset, c) != NS || (islower(c) && charset_xlate(ccharset, toupper(c)) != NS)) {
+	    enq_event(DATA, c, true, SLOW);
+	}
+	return true;
     } else {
-	return False;
+	return false;
     }
 }
 
 static void
 enq_delay(void)
 {
-    enq_event(DUMMY, 0, False, VERY_SLOW);
+    enq_event(DUMMY, 0, false, VERY_SLOW);
 }
 
 /*
@@ -1718,7 +1722,7 @@ Data_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 
     ll = XLookupString(kevent, buf, 10, &ks, (XComposeStatus *)NULL);
     if (ll == 1) {
-	enq_event(DATA, buf[0] & 0xff, True, SLOW);
+	enq_event(DATA, buf[0] & 0xff, true, SLOW);
     }
 }
 
@@ -1739,7 +1743,7 @@ MultiPunchData_action(Widget wid, XEvent *event, String *params,
 
     ll = XLookupString(kevent, buf, 10, &ks, (XComposeStatus *)NULL);
     if (ll == 1) {
-	enq_event(MULTIPUNCH, buf[0], True, SLOW);
+	enq_event(MULTIPUNCH, buf[0], true, SLOW);
     }
 }
 
@@ -1749,7 +1753,7 @@ Left_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
     action_dbg("Left", wid, event, params, num_params);
 
     if (power_on && CARD_REGISTERED) {
-	enq_event(KEY_LEFT, 0, True, SLOW);
+	enq_event(KEY_LEFT, 0, true, SLOW);
     }
 }
 
@@ -1759,7 +1763,7 @@ Right_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
     action_dbg("Right", wid, event, params, num_params);
 
     if (power_on && CARD_REGISTERED) {
-	enq_event(KYBD_RIGHT, 1, True, SLOW);
+	enq_event(KYBD_RIGHT, 1, true, SLOW);
     }
 }
 
@@ -1774,9 +1778,9 @@ Home_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 	flush_typeahead();
 	punch_state = C_FLUX;
 	for (i = 0; i < col; i++) {
-	    enq_event(HOME, 0, False, FAST);
+	    enq_event(HOME, 0, false, FAST);
 	}
-	enq_event(REGISTERED, 0, False, 0);
+	enq_event(REGISTERED, 0, false, 0);
     }
 }
 
@@ -1787,13 +1791,13 @@ Home_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 static void
 rel_key_backend(kpkey_t *key)
 {
-    dbg_printf("release(%s) eq_count = %d\n",
-	    CARD_REGISTERED? "card": "no card", eq_count);
+    dbg_printf("[callback] release(%s) eq_count = %d\n", CARD_REGISTERED? "card": "no card", eq_count);
 
     if (power_on && CARD_REGISTERED) {
 	do_release(VERY_FAST);
-	if (toggles[T_AUTO_FEED].on)
-	    do_feed(False);
+	if (toggles[T_AUTO_FEED].on) {
+	    do_feed(false);
+	}
     }
 }
 
@@ -1820,9 +1824,9 @@ Tab_action(Widget wid, XEvent *event, String *params, Cardinal *num_params)
 	flush_typeahead();
 	punch_state = C_FLUX;
 	for (i = col; i < 6; i++) {
-	    enq_event(KYBD_RIGHT, 1, False, SLOW);
+	    enq_event(KYBD_RIGHT, 1, false, SLOW);
 	}
-	enq_event(REGISTERED, 0, False, 0);
+	enq_event(REGISTERED, 0, false, 0);
     }
 }
 
@@ -1841,7 +1845,7 @@ drop_key_backend(kpkey_t *key)
 
     /* Do a Home operation. */
     for (i = 0; i <= col; i++) {
-	enq_event(KEY_LEFT, 0, False, FAST);
+	enq_event(KEY_LEFT, 0, false, FAST);
     }
 
     /*
@@ -1849,14 +1853,14 @@ drop_key_backend(kpkey_t *key)
      * XXX: Another magic number.
      */
     for (i = 0; i < 87; i++) {
-	enq_event(PAN_LEFT_PRINT, 0, False, FAST);
+	enq_event(PAN_LEFT_PRINT, 0, false, FAST);
     }
 
     if (toggles[T_AUTO_FEED].on) {
-	do_feed(True);
+	do_feed(true);
     } else {
 	/* Queue up a state change. */
-	enq_event(EMPTY, True, False, 0);
+	enq_event(EMPTY, True, false, 0);
     }
 }
 
@@ -1865,7 +1869,7 @@ static void
 feed_key_backend(kpkey_t *key)
 {
     if (power_on && !eq_count && !CARD_REGISTERED) {
-	do_feed(False);
+	do_feed(false);
     }
 }
 
@@ -1940,6 +1944,7 @@ key_press(Widget w, XtPointer client_data, XtPointer call_data)
 {
     kpkey_t *key = (kpkey_t *)client_data;
 
+    dbg_printf("[callback] %s\n", key->name);
     show_key_down(key);
     if (key->backend) {
 	key->backend(key);
@@ -1962,7 +1967,7 @@ do_release(int delay)
 
     /* Space over the remainder of the card. */
     for (i = col; i < N_COLS; i++) {
-	enq_event(REL_RIGHT, 0, False, delay);
+	enq_event(REL_RIGHT, 0, false, delay);
     }
 
     /*
@@ -1970,14 +1975,14 @@ do_release(int delay)
      * XXX: The end column is a magic number.
      */
     for (i = 0; i < 22; i++) {
-	enq_event(PAN_RIGHT_BOTH, 0, False, delay);
+	enq_event(PAN_RIGHT_BOTH, 0, false, delay);
     }
 
     /* The punch station is now empty. */
-    enq_event(EMPTY, False, False, 0);
+    enq_event(EMPTY, false, false, 0);
 
     /* We've saved a new card. */
-    enq_event(STACK, 0, False, 0);
+    enq_event(STACK, 0, false, 0);
 }
 
 /*
@@ -1994,44 +1999,44 @@ do_clear_read(void)
      * XXX: The end column is a magic number.
      */
     for (i = 0; i < N_COLS + 14; i++) {
-	enq_event(PAN_RIGHT_READ, 0, False, VERY_FAST);
+	enq_event(PAN_RIGHT_READ, 0, false, VERY_FAST);
     }
 
     /* We've saved a new card. */
-    enq_event(STACK, 0, False, 0);
+    enq_event(STACK, 0, false, 0);
 }
 
 /* Pull a card from the (infinite) hopper into the punch station. */
 static void
-do_feed(Boolean keep_sequence)
+do_feed(bool keep_sequence)
 {
     int i;
 
-    enq_event(NEWCARD, keep_sequence, False, FAST);
+    enq_event(NEWCARD, keep_sequence, false, FAST);
 
     /* Scroll the new card down. */
-    enq_event(SLAM, 0, False, SLOW);
+    enq_event(SLAM, 0, false, SLOW);
     for (i = 0; i <= N_ROWS + 1; i++) {
-	    enq_event(PAN_UP, 0, False, FAST);
+	    enq_event(PAN_UP, 0, false, FAST);
     }
     for (i = SLAM_COL; i < SLAM_TARGET_COL; i++) {
-	    enq_event(PAN_RIGHT_PRINT, 0, False, VERY_FAST);
+	    enq_event(PAN_RIGHT_PRINT, 0, false, VERY_FAST);
     }
 
     /* There is now a card registered in the punch station. */
-    enq_event(REGISTERED, 0, False, 0);
+    enq_event(REGISTERED, 0, false, 0);
 }
 
 /* Start-up sequence. */
 void
-queued_POWER_ON(int ignored)
+queued_POWER_ON(unsigned char ignored)
 {
-    power_on = True;
+    power_on = true;
     XtVaSetValues(power_widget, XtNbackgroundPixmap, flipper_on, NULL);
 }
 
 void
-queued_PRESS_FEED(int ignored)
+queued_PRESS_FEED(unsigned char ignored)
 {
     show_key_down(&feed_key);
 }
@@ -2039,25 +2044,25 @@ queued_PRESS_FEED(int ignored)
 static void
 startup_power_feed(void)
 {
-    enq_event(POWER_ON, 0, False, VERY_SLOW);
-    enq_event(PRESS_FEED, 0, False, VERY_SLOW);
-    do_feed(False);
+    enq_event(POWER_ON, 0, false, VERY_SLOW);
+    enq_event(PRESS_FEED, 0, false, VERY_SLOW);
+    do_feed(false);
 }
 
 static void
 startup_power(void)
 {
-    enq_event(POWER_ON, 0, False, VERY_SLOW);
+    enq_event(POWER_ON, 0, false, VERY_SLOW);
 }
 
 void
-queued_PRESS_REL(int ignored)
+queued_PRESS_REL(unsigned char ignored)
 {
     show_key_down(&rel_key);
 }
 
 void
-queued_EMPTY(int free_it)
+queued_EMPTY(unsigned char free_it)
 {
     if (free_it && ps_card != NULL) {
 	XtFree((XtPointer)ps_card);
@@ -2106,7 +2111,7 @@ stack_card(card_t **c)
  * Otherwise, shift the card from the punch station directly into the stacker.
  */
 void
-queued_STACK(int ignored)
+queued_STACK(unsigned char ignored)
 {
     if (appres.read) {
 	Widget w;
@@ -2129,16 +2134,26 @@ queued_STACK(int ignored)
     }
 }
 
-/* Demo processing. */
+/* Auto-play processing. */
 typedef enum {
     DS_READ,	/* need to read from the file */
     DS_CHAR,	/* need to process a character from the file */
     DS_SPACE,	/* need to space over the rest of the card */
     DS_EOF	/* done */
-} demo_state_t;
+} ap_state_t;
 static const char *ds_name[] = { "READ", "CHAR", "SPACE", "EOF" };
-static demo_state_t ds = DS_READ;
 XtInputId read_id = 0;
+#define AP_BUFSIZE	1024
+typedef struct {
+    const char *name;	/* FSM name, for debug display */
+    bool read;		/* true to fetch input, false to use static string */
+    ap_state_t state;	/* state */
+    char *buf;		/* input buffer */
+    ssize_t rbsize;	/* buffer size */
+    char *s;		/* buffer pointer */
+} fsm_cx_t;
+fsm_cx_t paste_fsm_cx, ap_fsm_cx;
+static void run_fsm(fsm_cx_t *cx);
 
 /* Input is now readable. */
 static void
@@ -2146,54 +2161,92 @@ read_more(XtPointer closure, int *fd, XtInputId *id)
 {
     XtRemoveInput(read_id);
     read_id = 0;
-    demo_fsm();
+    run_fsm(&ap_fsm_cx);
+}
+
+static void
+init_fsms()
+{
+    paste_fsm_cx.name = "paste";
+    paste_fsm_cx.state = DS_READ;
+
+    ap_fsm_cx.name = "ap";
+    ap_fsm_cx.read = true;
+    ap_fsm_cx.state = DS_READ;
+    ap_fsm_cx.buf = XtMalloc(AP_BUFSIZE);
+    ap_fsm_cx.rbsize = 0;
+    ap_fsm_cx.s = ap_fsm_cx.buf + AP_BUFSIZE;
+}
+
+/* Run the paste and auto-play FSMs. */
+void
+run_fsms(void)
+{
+    if (eq_count == 0) {
+	/* The paste FSM has absoulte priority over the auto-play FSM. */
+	if (paste_fsm_cx.state != DS_READ) {
+	    run_fsm(&paste_fsm_cx);
+	} else if (mode != M_INTERACTIVE) {
+	    run_fsm(&ap_fsm_cx);
+	}
+    }
+}
+
+/* Clean up the state of the paste FSM. */
+static void
+paste_fsm_cleanup(fsm_cx_t *cx)
+{
+    if (!cx->read && cx->buf != NULL) {
+	XtFree(cx->buf);
+	cx->buf = NULL;
+	cx->rbsize = 0;
+	cx->s = NULL;
+    }
 }
 
 /*
- * Crank the demo FSM.
+ * Crank a paste/auto-play FSM.
  */
-void
-demo_fsm(void)
+static void
+run_fsm(fsm_cx_t *cx)
 {
-    static char buf[1024];
-    ssize_t nr;
-    static ssize_t rbsize = 0;
-    static char *s = buf + sizeof(buf);
     char c;
 
-    if (mode == M_INTERACTIVE) {
-	return;
-    }
-
     do {
-	dbg_printf("demo_fsm: %s\n", ds_name[ds]);
+	dbg_printf("[%s fsm] %s\n", cx->name, ds_name[cx->state]);
 
-	switch (ds) {
+	switch (cx->state) {
 
 	case DS_READ:
+	    if (!cx->read) {
+		return;
+	    }
+
 	    /* Keep munching on the same buffer. */
-	    if (s < buf + rbsize) {
-		dbg_printf(" continuing, %zd more\n", buf + rbsize - s);
+	    if (cx->s < cx->buf + cx->rbsize) {
+		dbg_printf("[%s fsm]  continuing, %zd more\n", cx->name, cx->buf + cx->rbsize - cx->s);
 	    } else {
+		ssize_t nr;
+
 		/* Read the next card. */
-		nr = read(demofd, buf, sizeof(buf));
-		dbg_printf(" got %zd chars\n", nr);
+		nr = read(ap_fd, cx->buf, AP_BUFSIZE);
+		dbg_printf("[%s fsm]  got %zd chars\n", cx->name, nr);
 		if (nr == 0) {
 		    if (read_id != 0) {
 			XtRemoveInput(read_id);
 			read_id = 0;
 		    }
-		    close(demofd);
-		    demofd = -1;
+		    close(ap_fd);
+		    ap_fd = -1;
 
 		    /* Next, exit. */
-		    ds = DS_EOF;
+		    cx->state = DS_EOF;
 		    break;
 		}
 		if (nr < 0) {
 		    if (errno == EWOULDBLOCK) {
 			if (read_id == 0)
-			    read_id = XtAppAddInput(appcontext, demofd,
+			    read_id = XtAppAddInput(appcontext, ap_fd,
 				    (XtPointer)XtInputReadMask, read_more,
 				    NULL);
 			return;
@@ -2202,31 +2255,32 @@ demo_fsm(void)
 			exit(1);
 		    }
 		}
-		rbsize = nr;
-		s = buf;
+		cx->rbsize = nr;
+		cx->s = cx->buf;
 	    }
 
 	    /* Next, start munching on it. */
-	    ds = DS_CHAR;
+	    cx->state = DS_CHAR;
 	    break;
 
 	case DS_CHAR:
 	    if (!CARD_REGISTERED) {
 		/* XXX: It might be in flux? */
-		static Boolean unfed = True;
+		static bool unfed = true;
 
 		if (mode == M_BATCH && unfed) {
-		    unfed = False;
+		    unfed = false;
 		    show_key_down(&feed_key);
 		}
-		do_feed(False);
+		do_feed(false);
 		if (mode == M_BATCH) {
 		    enq_delay();
 		}
 		break;
 	    }
-	    c = *s++;
-	    dbg_printf(" c = 0x%02x, col = %d\n", c & 0xff, col);
+	    c = *(cx->s);
+	    cx->s++;
+	    dbg_printf("[%s fsm]  c = 0x%02x, col = %d\n", cx->name, c & 0xff, col);
 	    if (c == '\n') {
 		/*
 		 * End of input line.
@@ -2234,54 +2288,94 @@ demo_fsm(void)
 		 * Delay if there is anything to see; start
 		 * spacing to the end of the card.
 		 */
-		if (col)
-		    enq_event(PRESS_REL, 0, False, VERY_SLOW);
-		else
-		    enq_event(PRESS_REL, 0, False, 0);
-		ds = DS_SPACE;
+		if (col) {
+		    enq_event(PRESS_REL, 0, false, VERY_SLOW);
+		} else {
+		    enq_event(PRESS_REL, 0, false, 0);
+		}
+		cx->state = DS_SPACE;
 		break;
 	    }
-	    if (col < (appres.autonumber? (N_COLS - 8): N_COLS)) {
-		add_char(c);
-	    }
-	    if (s >= buf + rbsize) {
+	    did_auto_rel = false;
+	    add_char(c);
+	    if (cx->s >= cx->buf + cx->rbsize) {
 		/*
 		 * Ran out of buffer without a newline.
 		 *
 		 * Go read some more.
 		 */
-		ds = DS_READ;
+		cx->state = DS_READ;
+		paste_fsm_cleanup(cx);
 		continue;
 	    }
 	    break;
 
 	case DS_SPACE:
-	    do_release(FAST);
-	    /*
-	     * In remote control mode, create a new card.
-	     * In demo mode, wait for data before
-	     * doing it.
-	     */
-	    if (mode == M_REMOTECTL) {
-		do_feed(False);
+	    if (!did_auto_rel) {
+		do_release(FAST);
+		/*
+		 * In remote control mode, create a new card.
+		 * In auto-play mode, wait for data before
+		 * doing it.
+		 */
+		if (mode == M_REMOTECTL || !cx->read) {
+		    do_feed(false);
+		}
 	    }
-	    ds = DS_READ;
+	    if (cx->s >= cx->buf + cx->rbsize) {
+		cx->state = DS_READ;
+		paste_fsm_cleanup(cx);
+	    } else {
+		cx->state = DS_CHAR;
+	    }
 	    break;
 
 	case DS_EOF:
 	    /* Done. */
 	    auto_feed_off();
-	    enq_event(CLEAR_SEQ, 0, False, SLOW * 3);
+	    enq_event(CLEAR_SEQ, 0, false, SLOW * 3);
 	    break;
 	}
     } while (eq_count == 0 && power_on);
 }
 
+/* Add a pasted character. */
+void
+add_paste_char(unsigned char c)
+{
+    fsm_cx_t *cx = &paste_fsm_cx;
+
+    if (cx->buf == NULL) {
+	/* First char. */
+	cx->buf = XtMalloc(1);
+	cx->rbsize = 0;
+	cx->state = DS_CHAR;
+    } else {
+	/* Subsequent char. */
+	size_t left = cx->rbsize - (cx->s - cx->buf);
+	char *buf = XtMalloc(left + 1);
+
+	memcpy(buf, cx->s, left);
+	XtFree(cx->buf);
+	cx->buf = buf;
+	cx->rbsize = left;
+    }
+    cx->buf[cx->rbsize++] = c;
+    cx->s = cx->buf;
+}
+
+/* Make sure the paste operation runs. */
+void
+poke_fsm(void)
+{
+    enq_event(DUMMY, 0, false, 0);
+}
+
 /*
- * The shutdown sequence for demos.
+ * The shutdown sequence for auto-play.
  */
 void
-queued_CLEAR_SEQ(int ignored)
+queued_CLEAR_SEQ(unsigned char ignored)
 {
     /*
      * Hit the clear switch, which will enqueue operations to scroll the
@@ -2290,13 +2384,13 @@ queued_CLEAR_SEQ(int ignored)
     clear_switch();
 
     /* Enqueue the OFF operation after that. */
-    enq_event(OFF, 0, False, SLOW * 3);
+    enq_event(OFF, 0, false, SLOW * 3);
 
     /*
      * Enqueue a long dummy operation, to give the OFF time to run and to
-     * keep the demo FSM from being called again.
+     * keep the auto-play FSM from being called again.
      */
-    enq_event(DUMMY, 0, False, 6 * 1000);
+    enq_event(DUMMY, 0, false, 6 * 1000);
 }
 
 /* Accessor functions for appres. */
@@ -2370,24 +2464,23 @@ action_dbg(const char *name, Widget wid, XEvent *event, String *params,
 	return;
     }
 
-    dbg_printf("%s(widget %p", name, (void *)wid);
+    dbg_printf("[action] %s(", name);
+    for (i = 0; i < *num_params; i++) {
+	dbg_cprintf("%s%s", i? ", ": "", params[i]);
+    }
+    dbg_cprintf(") widget %p", (void *)wid);
     if (event) {
 	if (event->type == Expose) {
-	    dbg_cprintf(", Expose x=%d y=%d w=%d h=%d",
+	    dbg_cprintf(" Expose x=%d y=%d w=%d h=%d",
 		    event->xexpose.x,
 		    event->xexpose.y,
 		    event->xexpose.width,
 		    event->xexpose.height);
 	} else {
-	    dbg_cprintf(", event %d", event->type);
+	    dbg_cprintf(" event %d", event->type);
 	}
-    } else {
-	dbg_cprintf(", no event");
     }
-    for(i = 0; i < *num_params; i++) {
-	dbg_cprintf(", %s", params[i]);
-    }
-    dbg_cprintf(")\n");
+    dbg_cprintf("\n");
 }
 
 void
@@ -2396,28 +2489,9 @@ set_next_card_image(cardimg_t c)
     ncardimg = c;
 }
 
-static Boolean
-card_is_blank(void)
-{
-    int i;
-
-    if (ps_card == NULL) {
-	return True;
-    }
-    for (i = 0; i < N_COLS; i++) {
-	if (ps_card->holes[i]) {
-	    return False;
-	}
-    }
-    return True;
-}
-
 int
 set_charset(charset_t c)
 {
-    if (punch_state != C_EMPTY && !card_is_blank()) {
-	return -1;
-    }
     ccharset = c;
     if (ps_card != NULL) {
 	ps_card->charset = c;
@@ -2425,7 +2499,7 @@ set_charset(charset_t c)
     return 0;
 }
 
-Boolean
+bool
 debugging(void)
 {
     return appres.debug;
